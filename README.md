@@ -39,24 +39,7 @@ The entire production process requires no manual intervention.
 
 ## Workflow
 
-```mermaid
-flowchart LR
-    A[Web Novel] --> B[Story Analysis]
-    B --> C[Screenplay]
-    C --> D[Character & World Design]
-    D --> E[Storyboard]
-    E --> F[Image / Video Generation]
-    C --> G[Voice & Audio]
-    F --> H[Editing & Subtitles]
-    G --> H
-    H --> I[Final Movie]
-```
 
-1. Parse the novel and extract characters, locations, events, and timelines.
-2. Adapt the source text into scenes, dialogue, narration, and camera directions.
-3. Generate reusable character references and storyboard frames.
-4. Produce video shots while preserving visual consistency.
-5. Add voices, music, sound effects, subtitles, and export the final movie.
 
 ## Examples
 
