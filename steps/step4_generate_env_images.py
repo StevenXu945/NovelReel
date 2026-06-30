@@ -2,10 +2,27 @@ import json
 import os
 import re
 import shutil
+from pathlib import Path
 from PIL import Image
+import yaml
 from provider.image_generator import ImageGenerator
 from provider.llm_provider import LLMClient
 from core.project_paths import resolve_previous_asset_dir
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
+
+
+def _load_video_ratio(config_path=None):
+    config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+    if not config_path.is_absolute():
+        config_path = PROJECT_ROOT / config_path
+    if not config_path.exists():
+        return "16:9"
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f) or {}
+    return str(config.get("video", {}).get("ratio") or "16:9").strip() or "16:9"
 
 
 PROMPT_PLAN_CHAPTER_ENV_ASSETS = """你是一个连续剧场景资产统筹。请根据本章节分镜里的环境，与截至当前章节前已经建立的全局环境资产对齐，决定每个本章节环境图如何处理。
@@ -45,17 +62,18 @@ class EnvironmentImageGenerator:
     为每个环境生成单张参考图。
     """
 
-    def __init__(self, output_dir="output"):
+    def __init__(self, output_dir="output", config_path=None):
         self.image_gen = ImageGenerator(output_dir=output_dir, provider="seedream")
         self.llm = LLMClient()
         self.output_dir = output_dir
         self.env_dir = os.path.join(output_dir, "environments")
         self.save_path = os.path.join(output_dir, "env_images.json")
         self.plan_save_path = os.path.join(output_dir, "env_asset_plan.json")
+        self.aspect_ratio = _load_video_ratio(config_path)
 
 
     def run(self, storyboards, style="写实"):
-        print(f"\n[步骤4] 生成环境图（风格: {style}）...")
+        print(f"\n[步骤4] 生成环境图（风格: {style}，比例: {self.aspect_ratio}）...")
         os.makedirs(self.env_dir, exist_ok=True)
 
         env_images = {}
@@ -93,7 +111,7 @@ class EnvironmentImageGenerator:
                 prompt,
                 reference_urls,
                 img_path,
-                aspect_ratio="16:9",
+                aspect_ratio=self.aspect_ratio,
                 force=True,
             )
             source_path = reference_info.get("path", "")
@@ -111,7 +129,7 @@ class EnvironmentImageGenerator:
                     retry_prompt,
                     reference_urls,
                     img_path,
-                    aspect_ratio="16:9",
+                    aspect_ratio=self.aspect_ratio,
                     force=True,
                 )
                 retry_similarity = self._image_similarity_score(source_path, result_path or img_path)
@@ -141,7 +159,7 @@ class EnvironmentImageGenerator:
         result_path, image_url = self.image_gen._text_to_image(
             prompt,
             img_path,
-            aspect_ratio="16:9",
+            aspect_ratio=self.aspect_ratio,
             force=force_new,
         )
 
@@ -155,7 +173,7 @@ class EnvironmentImageGenerator:
         print(f"  环境 {env_id} 完成")
 
     def run_with_previous(self, storyboards, style="写实", previous_output_dir=None, model="gemini-3.1-pro-preview", previous_envs=None):
-        print(f"\n[步骤4] 生成/复用环境图（风格: {style}）...")
+        print(f"\n[步骤4] 生成/复用环境图（风格: {style}，比例: {self.aspect_ratio}）...")
         os.makedirs(self.env_dir, exist_ok=True)
 
         previous_envs = previous_envs or self._load_previous_env_images(previous_output_dir)
@@ -201,19 +219,24 @@ class EnvironmentImageGenerator:
                     f"参考图1的场景空间结构、建筑/地形布局和美术风格，生成同一地点在本章节的新状态。"
                     f"变化原因：{action_info.get('reason', '')}。本章节环境：{env_desc}。"
                     f"\n{self.build_style_block(style)}\n"
-                    "画面要求：16:9 横版影视环境参考图，不出现人物、角色、文字、字幕、标识或水印。"
+                    f"画面要求：{self.build_aspect_ratio_prompt()}，不出现人物、角色、文字、字幕、标识或水印。"
                 )
                 print(f"  环境 {env_id} 参考已有环境 {previous_id} 生成新图")
                 result_path, image_url = self.image_gen.generate_reference_image(
                     prompt,
                     reference_urls,
                     img_path,
-                    aspect_ratio="16:9",
+                    aspect_ratio=self.aspect_ratio,
                     force=True,
                 )
             else:
                 print(f"  环境 {env_id} 生成新环境图")
-                result_path, image_url = self.image_gen._text_to_image(prompt, img_path, aspect_ratio="16:9", force=True)
+                result_path, image_url = self.image_gen._text_to_image(
+                    prompt,
+                    img_path,
+                    aspect_ratio=self.aspect_ratio,
+                    force=True,
+                )
 
             env_images[str(env_id)] = {
                 "path": result_path or img_path,
@@ -237,6 +260,13 @@ class EnvironmentImageGenerator:
             f"本项目统一风格：{style}。\n"
             f"{style_rules}"
         )
+
+    def build_aspect_ratio_prompt(self, shot_type="cinematic shot"):
+        if self.aspect_ratio == "9:16":
+            return f"9:16 竖版短视频环境参考图，vertical {shot_type}"
+        if self.aspect_ratio == "16:9":
+            return f"16:9 横版影视环境参考图，{shot_type}"
+        return f"{self.aspect_ratio} 画幅环境参考图，{shot_type}"
 
     def build_style_rules(self, style):
         """把抽象 style 转成强约束，避免基础规则和项目风格互相冲突。"""
@@ -271,7 +301,7 @@ class EnvironmentImageGenerator:
         return (
             f"{self.build_style_block(style)}\n"
             f"当前环境设定：{env_desc}\n"
-            "画面要求：16:9 横版影视环境参考图，cinematic wide shot，高质量，细节丰富；"
+            f"画面要求：{self.build_aspect_ratio_prompt('cinematic wide shot')}，高质量，细节丰富；"
             "只画静态场景空间、建筑/地形布局、光线、天气、色调和氛围；"
             "不要出现人物、角色、文字、字幕、标识或水印；"
             "整张图必须严格执行本项目统一风格，保持一致的美术风格、线条/材质/光影/色彩分级和后期质感。"
@@ -309,7 +339,7 @@ class EnvironmentImageGenerator:
             f"{reference_instruction}\n"
             f"{camera_instruction}\n"
             f"当前变体环境设定：{env_desc}\n"
-            "画面要求：16:9 横版影视环境参考图，cinematic shot，高质量，细节丰富；"
+            f"画面要求：{self.build_aspect_ratio_prompt('cinematic shot')}，高质量，细节丰富；"
             "只画静态场景空间、建筑/地形布局、光线、天气、色调、构图方位和氛围；"
             "不要出现人物、角色、文字、字幕、标识或水印；"
             "不能改变原场景的核心地点识别度，不能生成完全不同的新地点；"
