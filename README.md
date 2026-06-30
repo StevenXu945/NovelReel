@@ -263,7 +263,7 @@ After Step 5 has produced `video_clips.json` and `videos/*.mp4`, run the voice p
 Step 1: extract dialogue text and timing:
 
 ```bash
-python voice/extract_diaglogues_time.py output/chapter_01 --model gemini-3.1-pro-preview --asr-model voice/faster-whisper-large --device cpu --compute-type int8
+python voice/extract_dialogue_time.py output/chapter_01 --model gemini-3.1-pro-preview --asr-model voice/faster-whisper-large --device cpu --compute-type int8
 ```
 
 Prepare voice templates under the chapter directory:
