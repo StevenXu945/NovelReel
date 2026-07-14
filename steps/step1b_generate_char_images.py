@@ -28,13 +28,16 @@ class CharacterImageGenerator:
     def build_prompt(self, char, style="写实"):
         """构建角色设定图 prompt：左侧脸部特写，右侧全身三视图"""
         age = char.get('age', '')
+        brief_description = str(char.get('brief_description') or '').rstrip("。")
         appearance = char['appearance'].rstrip("。")
         clothing = char['clothing'].rstrip("。")
         age_str = f"{age}，" if age else ""
+        brief_description_line = f"当前角色定位：{brief_description}。\n" if brief_description else ""
         style_rules = self._build_style_rules(style)
         return (
             f"本项目统一风格：{style}。\n"
             f"{style_rules}\n"
+            f"{brief_description_line}"
             f"当前角色设定：{age_str}{appearance}。\n"
             f"当前角色服装：{clothing}。\n"
             f"画面要求：角色设定图，白色背景，从左到右依次为站立的全身正面、全身侧面、全身背面。"
@@ -104,10 +107,14 @@ class CharacterImageGenerator:
         for char in characters:
             name = char["name"]
             char_id = char["id"]
+            action = char.get("asset_action", "new")
+            previous_name = char.get("previous_name") or name
             save_path = os.path.join(self.chars_dir, f"character_{char_id}.png")
 
             cached_info = character_images.get(name, {})
             should_regenerate = self._is_cached_prompt_stale(cached_info, style) if cached_info else False
+            if action == "update" and cached_info and cached_info.get("asset_action") != "update":
+                should_regenerate = True
 
             # 跳过已存在且 prompt 未过期的图片
             if name in character_images and os.path.exists(save_path) and not should_regenerate:
@@ -115,11 +122,26 @@ class CharacterImageGenerator:
                 continue
 
             full_prompt = self.build_prompt(char, style)
+            reference_info = character_images.get(previous_name, {}) if action == "update" else {}
+            reference_url = reference_info.get("image_url", "")
+            reference_path = reference_info.get("path", "")
+            reference_urls = [reference_url] if reference_url else []
+            if action == "update":
+                full_prompt = (
+                    "参考图1中同一角色原形态的脸部、五官、体型、服装来源和身份特征，"
+                    "保持人物身份与画风一致；在此基础上生成下述新形态，不要生成无关的新角色。"
+                    f"形态变化原因：{char.get('asset_reason', '')}。\n{full_prompt}"
+                )
+                if reference_urls:
+                    print(f"  角色 [{name}] 基于同章角色 [{previous_name}] 图生图")
+                else:
+                    print(f"  警告：角色 [{name}] 未找到同章参考角色 [{previous_name}] 的图片URL，退回文生图")
             print(full_prompt)
             result_path, image_url = self.image_gen.generate_character_image(
                 full_prompt,
                 save_path=save_path,
-                force=should_regenerate,
+                force=should_regenerate or action == "update",
+                reference_image_urls=reference_urls,
             )
 
             if result_path and os.path.exists(save_path):
@@ -128,6 +150,9 @@ class CharacterImageGenerator:
                     "image_url": image_url,
                     "prompt": full_prompt,
                     "char_id": char_id,
+                    "asset_action": action,
+                    "asset_reason": char.get("asset_reason", ""),
+                    "source_path": reference_path if action == "update" else "",
                 }
                 # 每成功一张就保存索引，避免中途失败丢失进度
                 self.save(character_images)
