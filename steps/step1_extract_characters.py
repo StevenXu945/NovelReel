@@ -196,6 +196,7 @@ class CharacterExtractor:
 
         characters = self._audit_and_fix_costume_variants(novel_text, characters, {"style": style, "characters": []})
         characters = self._assign_first_chapter_ids(characters)
+        characters = self._link_first_chapter_transformation_variants(characters)
 
         print(f"  画面风格: {style}")
         print(f"  共提取 {len(characters)} 个角色:")
@@ -251,6 +252,30 @@ class CharacterExtractor:
             char.setdefault("asset_action", "new")
             char.setdefault("asset_reason", "首章新增角色资产")
             char.setdefault("previous_name", "")
+        return characters
+
+    def _link_first_chapter_transformation_variants(self, characters):
+        """首章中的变身形态应参考同章常态资产，而不是作为无参考的新角色生成。"""
+        transformation_markers = (
+            "变身", "变异", "异化", "半人", "半蛇", "兽化", "妖化", "魔化",
+            "怪物形态", "战斗形态", "强化形态", "第二形态", "最终形态",
+        )
+        base_by_name = {}
+        for char in characters:
+            name = str(char.get("name") or "").strip()
+            base_name = re.sub(r"[（(][^）)]*[）)]\s*$", "", name).strip()
+            variant_text = " ".join((
+                name,
+                str(char.get("brief_description") or ""),
+                str(char.get("appearance") or ""),
+            ))
+            base_char = base_by_name.get(base_name)
+            if base_char and any(marker in variant_text for marker in transformation_markers):
+                char["asset_action"] = "update"
+                char["asset_reason"] = f"同一角色的新形态，基于{base_char.get('name')}角色图进行图生图"
+                char["previous_name"] = base_char.get("name", "")
+            elif base_name:
+                base_by_name.setdefault(base_name, char)
         return characters
 
     def _normalize_chapter_character_ids(self, characters, previous_data):
@@ -341,7 +366,12 @@ class CharacterExtractor:
             data = json.load(f)
         # 兼容旧格式（纯列表）
         if isinstance(data, list):
-            return {"style": "写实", "characters": data}
+            data = {"style": "写实", "characters": data}
+        characters = data.get("characters", [])
+        before = json.dumps(characters, ensure_ascii=False, sort_keys=True)
+        data["characters"] = self._link_first_chapter_transformation_variants(characters)
+        if json.dumps(data["characters"], ensure_ascii=False, sort_keys=True) != before:
+            self.save(data)
         return data
 
     def _load_previous_characters(self, previous_output_dir):
