@@ -273,12 +273,7 @@ class CharacterExtractor:
                 str(char.get("appearance") or ""),
             ))
             base_char = base_by_name.get(base_name)
-            if base_char and self._looks_like_new_costume_asset(char):
-                char["asset_action"] = "new_variant"
-                char["asset_reason"] = (
-                    f"同一角色新增换装造型，需要独立角色资产并基于"
-                    f"{base_char.get('name')}角色图进行图生图"
-                )
+            if base_char and char.get("asset_action") == "new_variant":
                 char["previous_name"] = base_char.get("name", "")
                 char["base_character_id"] = base_char.get("id")
             elif base_char and any(marker in variant_text for marker in transformation_markers):
@@ -297,7 +292,7 @@ class CharacterExtractor:
         for char in characters:
             action = char.get("asset_action", "new")
             previous_char = self._find_previous_character(char, previous_data.get("characters", []))
-            if action == "new_variant" or self._looks_like_new_costume_asset(char):
+            if action == "new_variant":
                 previous_char = previous_char or self._find_costume_base_character(
                     char,
                     previous_data.get("characters", []),
@@ -306,23 +301,22 @@ class CharacterExtractor:
                 if previous_char:
                     char["previous_name"] = previous_char.get("name", "")
                     char["base_character_id"] = previous_char.get("id")
+                elif action == "new_variant":
+                    action = "new"
+                    char["asset_action"] = "new"
+                    char["asset_reason"] = "未找到同一角色的基础造型，按首次出现的新角色建立基础资产"
+                    char["previous_name"] = ""
+                    char["base_character_id"] = None
             if previous_char and action in {"new", "update"} and self._looks_like_minor_local_body_detail(char):
                 action = "reuse"
                 char["asset_action"] = "reuse"
                 char["asset_reason"] = "局部肢体细节不足以更新标准角色资产，复用已有角色资产"
                 char["previous_name"] = previous_char.get("name", "")
                 self._copy_previous_visual_fields(char, previous_char)
-            elif previous_char and action == "new" and not self._looks_like_new_costume_asset(char) and not self._is_cross_human_age_stage(char, previous_char):
+            elif previous_char and action == "new" and not self._is_cross_human_age_stage(char, previous_char):
                 action = "update"
                 char["asset_action"] = "update"
                 char["previous_name"] = previous_char.get("name", "")
-            if action in {"new", "update"} and self._looks_like_new_costume_asset(char):
-                action = "new_variant"
-                char["asset_action"] = "new_variant"
-                char["asset_reason"] = "同一角色新增换装造型，需要独立角色资产并基于原角色图进行图生图"
-                if previous_char:
-                    char["previous_name"] = previous_char.get("name", "")
-                    char["base_character_id"] = previous_char.get("id")
             elif action == "update" and self._is_cross_human_age_stage(char, previous_char):
                 action = "new"
                 char["asset_action"] = "new"
@@ -396,10 +390,26 @@ class CharacterExtractor:
             data = {"style": "写实", "characters": data}
         characters = data.get("characters", [])
         before = json.dumps(characters, ensure_ascii=False, sort_keys=True)
+        characters = self._repair_invalid_costume_variants(characters)
         data["characters"] = self._link_first_chapter_transformation_variants(characters)
         if json.dumps(data["characters"], ensure_ascii=False, sort_keys=True) != before:
             self.save(data)
         return data
+
+    def _repair_invalid_costume_variants(self, characters):
+        """没有基础资产关联的 new_variant 不具备图生图条件，应恢复为普通新角色。"""
+        for char in characters or []:
+            if not isinstance(char, dict) or char.get("asset_action") != "new_variant":
+                continue
+            previous_name = str(char.get("previous_name") or "").strip()
+            base_character_id = char.get("base_character_id")
+            if previous_name and isinstance(base_character_id, int) and base_character_id > 0:
+                continue
+            char["asset_action"] = "new"
+            char["asset_reason"] = "未找到同一角色的基础造型，按首次出现的新角色建立基础资产"
+            char["previous_name"] = ""
+            char["base_character_id"] = None
+        return characters
 
     def _load_previous_characters(self, previous_output_dir):
         previous_asset_dir = resolve_previous_asset_dir(previous_output_dir, "characters.json")
@@ -463,18 +473,6 @@ class CharacterExtractor:
             signatures.add((name, clothing))
         return signatures
 
-    def _looks_like_new_costume_asset(self, char):
-        text = " ".join(
-            str(char.get(key, ""))
-            for key in ("name", "clothing", "asset_reason", "brief_description")
-        )
-        costume_keywords = (
-            "换装", "新造型", "造型", "服装变化", "身份装束", "制服", "便服",
-            "常服", "战甲", "礼服", "囚服", "伪装", "女装", "男装", "盔甲",
-            "铠甲", "斗篷", "婚服", "官服", "校服", "病号服",
-        )
-        return any(keyword in text for keyword in costume_keywords)
-
     def _looks_like_minor_local_body_detail(self, char):
         text = " ".join(
             str(char.get(key, ""))
@@ -500,8 +498,6 @@ class CharacterExtractor:
 
     def _should_reuse_same_age_stage(self, char, previous_char):
         if not previous_char:
-            return False
-        if self._looks_like_new_costume_asset(char):
             return False
         if not self._is_human_character(char):
             return False
