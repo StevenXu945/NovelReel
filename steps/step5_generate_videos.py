@@ -30,7 +30,7 @@ class VideoClipGenerator:
     默认只生成视频片段索引和视频生成描述；传入 use_video_generator=True 时才调用视频生成接口。
     """
 
-    MOTION_DESC_CONSTRAINT = "要求：不要有背景音乐；禁止出现任何文字、字幕、标题、标识或水印。"
+    MOTION_DESC_CONSTRAINT = "要求：不要有背景音乐；画面上禁止出现任何文字、字幕、标题、标识或水印。"
     VISUAL_TEXT_PATTERNS = (
         re.compile(r"画面[^，。；,]*(?:出现|浮现|显示|呈现)[^，。；,]*(?:字幕|文字|标题|汉字)[^，。；,]*[，。；,]?"),
         re.compile(r"(?:字幕|文字|标题|汉字)[^，。；,]*(?:出现|浮现|显示|呈现)[^，。；,]*[，。；,]?"),
@@ -77,7 +77,7 @@ class VideoClipGenerator:
         self,
         storyboards,
         env_images,
-        style="写实",
+        style="动漫",
         use_video_generator=False,
         video_provider=None,
         print_log_path=None,
