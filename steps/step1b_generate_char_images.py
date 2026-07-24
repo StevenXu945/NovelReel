@@ -107,13 +107,13 @@ class CharacterImageGenerator:
         for char in characters:
             name = char["name"]
             char_id = char["id"]
-            action = char.get("asset_action", "new")
+            action = self._normalized_asset_action(char)
             previous_name = char.get("previous_name") or name
             save_path = os.path.join(self.chars_dir, f"character_{char_id}.png")
 
             cached_info = character_images.get(name, {})
             should_regenerate = self._is_cached_prompt_stale(cached_info, style) if cached_info else False
-            if action == "update" and cached_info and cached_info.get("asset_action") != "update":
+            if action in {"update", "new_variant"} and cached_info and cached_info.get("asset_action") != action:
                 should_regenerate = True
 
             # 跳过已存在且 prompt 未过期的图片
@@ -122,11 +122,26 @@ class CharacterImageGenerator:
                 continue
 
             full_prompt = self.build_prompt(char, style)
-            reference_info = character_images.get(previous_name, {}) if action == "update" else {}
+            uses_reference = action in {"update", "new_variant"}
+            reference_info = character_images.get(previous_name, {}) if uses_reference else {}
             reference_url = reference_info.get("image_url", "")
             reference_path = reference_info.get("path", "")
             reference_urls = [reference_url] if reference_url else []
-            if action == "update":
+            if action == "new_variant":
+                if not reference_urls:
+                    print(
+                        f"  错误：换装角色 [{name}] 未找到同章基础造型 [{previous_name}] 的图片URL，"
+                        "为避免角色漂移，本次不退回文生图"
+                    )
+                    continue
+                full_prompt = (
+                    "参考图1是同一角色的基础造型。严格保持其脸部、五官、发型、发色、年龄感、"
+                    "肤色、体型、身材比例和身份辨识特征一致，只替换为下述新服装或身份造型。"
+                    "不要改变人物身份，不要沿用参考图中的旧服装，不要生成第二个人物。"
+                    f"换装原因：{char.get('asset_reason', '')}。\n{full_prompt}"
+                )
+                print(f"  角色 [{name}] 基于同章基础造型 [{previous_name}] 换装图生图")
+            elif action == "update":
                 full_prompt = (
                     "参考图1中同一角色原形态的脸部、五官、体型、服装来源和身份特征，"
                     "保持人物身份与画风一致；在此基础上生成下述新形态，不要生成无关的新角色。"
@@ -140,7 +155,7 @@ class CharacterImageGenerator:
             result_path, image_url = self.image_gen.generate_character_image(
                 full_prompt,
                 save_path=save_path,
-                force=should_regenerate or action == "update",
+                force=should_regenerate or uses_reference,
                 reference_image_urls=reference_urls,
             )
 
@@ -152,7 +167,7 @@ class CharacterImageGenerator:
                     "char_id": char_id,
                     "asset_action": action,
                     "asset_reason": char.get("asset_reason", ""),
-                    "source_path": reference_path if action == "update" else "",
+                    "source_path": reference_path if uses_reference else "",
                 }
                 # 每成功一张就保存索引，避免中途失败丢失进度
                 self.save(character_images)
@@ -178,7 +193,7 @@ class CharacterImageGenerator:
         for char in characters:
             name = char["name"]
             char_id = char["id"]
-            action = char.get("asset_action", "new")
+            action = self._normalized_asset_action(char)
             previous_name = char.get("previous_name") or name
             save_path = os.path.join(self.chars_dir, f"character_{char_id}.png")
             cached_info = character_images.get(name, {})
@@ -188,7 +203,12 @@ class CharacterImageGenerator:
                 print(f"  角色 [{name}] (character#{char_id}) 图片已存在，跳过")
                 continue
 
-            previous_info = previous_images.get(previous_name) or previous_images.get(name) or {}
+            previous_info = (
+                character_images.get(previous_name)
+                or previous_images.get(previous_name)
+                or previous_images.get(name)
+                or {}
+            )
             previous_path = previous_info.get("path", "")
             previous_url = previous_info.get("image_url", "")
             previous_prompt_stale = self._is_cached_prompt_stale(previous_info, style) if previous_info else False
@@ -211,8 +231,23 @@ class CharacterImageGenerator:
                 continue
 
             full_prompt = self.build_prompt(char, style)
-            reference_urls = [previous_url] if action == "update" and previous_url else []
-            if action == "update":
+            uses_reference = action in {"update", "new_variant"}
+            reference_urls = [previous_url] if uses_reference and previous_url else []
+            if action == "new_variant":
+                if not reference_urls:
+                    print(
+                        f"  错误：换装角色 [{name}] 未找到基础造型 [{previous_name}] 的图片URL，"
+                        "为避免角色漂移，本次不退回文生图"
+                    )
+                    continue
+                full_prompt = (
+                    "参考图1是同一角色的基础造型。严格保持其脸部、五官、发型、发色、年龄感、"
+                    "肤色、体型、身材比例和身份辨识特征一致，只替换为下述新服装或身份造型。"
+                    "不要改变人物身份，不要沿用参考图中的旧服装，不要生成第二个人物。"
+                    f"换装原因：{char.get('asset_reason', '')}。\n{full_prompt}"
+                )
+                print(f"  角色 [{name}] 基于基础造型 [{previous_name}] 换装图生图")
+            elif action == "update":
                 full_prompt = (
                     f"参考图1中同一角色的脸部、五官、体型和身份特征，保持角色一致性。"
                     f"根据本章节变化更新角色设定：{char.get('asset_reason', '')}。\n"
@@ -239,7 +274,7 @@ class CharacterImageGenerator:
                     "char_id": char_id,
                     "asset_action": action,
                     "asset_reason": char.get("asset_reason", ""),
-                    "source_path": previous_path if action == "update" else "",
+                    "source_path": previous_path if uses_reference else "",
                 }
                 self.save(character_images)
                 print(f"  角色 [{name}] (character#{char_id}) 设定图完成")
@@ -248,6 +283,19 @@ class CharacterImageGenerator:
 
         self.save(character_images)
         return character_images
+
+    @staticmethod
+    def _normalized_asset_action(char):
+        """兼容旧数据：把带明确换装关联信息的 new 视为 new_variant。"""
+        action = char.get("asset_action", "new")
+        if action == "new_variant":
+            return action
+        reason = str(char.get("asset_reason") or "")
+        if action == "new" and char.get("previous_name") and any(
+            marker in reason for marker in ("换装", "新造型", "身份造型", "独立角色资产")
+        ):
+            return "new_variant"
+        return action
 
     def regenerate_one(self, char_name, prompt, char_id=None):
         """根据给定 prompt 重新生成单个角色图片"""
