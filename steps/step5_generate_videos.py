@@ -103,7 +103,7 @@ class VideoClipGenerator:
             video_provider=video_provider,
         )
 
-    def _run(self, storyboards, env_images, style="写实", use_video_generator=False, video_provider=None):
+    def _run(self, storyboards, env_images, style="动漫", use_video_generator=False, video_provider=None):
         style = self._normalize_style(style)
         mode = "生成模式" if use_video_generator else "Mock模式"
         print(f"\n[步骤5] 生成视频片段（{mode}，风格: {style}）...")
@@ -217,7 +217,7 @@ class VideoClipGenerator:
 
     def _normalize_style(self, style):
         style = str(style or "").strip()
-        return style or "写实"
+        return style or "动漫"
 
     def _normalize_motion_desc(self, motion_desc):
         motion_desc = motion_desc.replace(f"，{self.MOTION_DESC_CONSTRAINT}", "")
