@@ -342,7 +342,7 @@ if __name__ == "__main__":
     from steps.step1_extract_characters import CharacterExtractor
     from core.global_asset_index import GlobalAssetIndex
 
-    parser = argparse.ArgumentParser(description="步骤2：生成或复用角色设定图")
+    parser = argparse.ArgumentParser(description="步骤1b：生成或复用角色设定图")
     parser.add_argument("--output-dir", default="output", help="当前章节输出目录")
     parser.add_argument("--chapter-name", default="chapter_01", help="章节文件夹名；留空则直接使用 output-dir")
     parser.add_argument("--model", default="gemini-3.1-pro-preview", help="兼容参数；本步骤不直接调用 LLM")
