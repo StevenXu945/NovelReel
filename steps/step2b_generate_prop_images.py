@@ -179,7 +179,7 @@ if __name__ == "__main__":
     from steps.step1_extract_characters import CharacterExtractor
     from steps.step2_extract_props import PropExtractor
 
-    parser = argparse.ArgumentParser(description="步骤2c：生成或复用道具设定图")
+    parser = argparse.ArgumentParser(description="步骤2b：生成或复用道具设定图")
     parser.add_argument("--output-dir", default="output", help="当前章节输出目录")
     parser.add_argument("--chapter-name", default="chapter_01", help="章节文件夹名；留空则直接使用 output-dir")
     parser.add_argument("--model", default="gemini-3.1-pro-preview", help="兼容参数；本步骤不直接调用 LLM")
