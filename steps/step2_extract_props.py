@@ -113,7 +113,7 @@ class PropExtractor:
     """提取章节关键道具资产。"""
 
     def __init__(self, output_dir="output", model="gemini-3.1-pro-preview"):
-        self.llm = LLMClient()
+        self.llm = LLMClient(model=model)
         self.model = model
         self.output_dir = output_dir
         self.save_path = os.path.join(output_dir, "props.json")
