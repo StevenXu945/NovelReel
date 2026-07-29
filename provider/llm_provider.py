@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import yaml
 from openai import OpenAI
 
@@ -18,7 +17,7 @@ def _resolve_config_path(config_path):
 
 
 class LLMClient:
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, model=None):
         config_path = _resolve_config_path(config_path)
         with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
@@ -30,7 +29,7 @@ class LLMClient:
             api_key=self.llm_config["api_key"],
         )
 
-        self.model = self.llm_config["model"]
+        self.model = model or self.llm_config["model"]
 
     def generate(self, prompt: str) -> str:
         params = {
