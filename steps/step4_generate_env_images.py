@@ -62,9 +62,9 @@ class EnvironmentImageGenerator:
     为每个环境生成单张参考图。
     """
 
-    def __init__(self, output_dir="output", config_path=None):
+    def __init__(self, output_dir="output", config_path=None, model="gemini-3.1-pro-preview"):
         self.image_gen = ImageGenerator(output_dir=output_dir, provider="seedream")
-        self.llm = LLMClient()
+        self.llm = LLMClient(model=model)
         self.output_dir = output_dir
         self.env_dir = os.path.join(output_dir, "environments")
         self.save_path = os.path.join(output_dir, "env_images.json")
@@ -273,23 +273,23 @@ class EnvironmentImageGenerator:
         style_text = str(style or "写实").strip()
         if any(keyword in style_text for keyword in ("动漫", "动画", "漫画", "手绘", "卡通", "二次元")):
             return (
-                "风格硬性要求：手绘动漫角色设定图，清晰干净的线稿，统一赛璐璐/手绘上色，"
+                "风格硬性要求：手绘动漫场景图，清晰干净的线稿，统一赛璐璐/手绘上色，"
                 "中式恐怖氛围可通过阴冷配色、夸张表情、诡异细节和光影表现；"
                 "禁止生成真人照片质感、电影写实摄影、3D渲染、欧美超写实游戏原画或油画厚涂。"
             )
         if "水墨" in style_text or "国画" in style_text:
             return (
-                "风格硬性要求：水墨/国画角色设定图，墨线、宣纸质感、留白和东方色彩必须明显；"
+                "风格硬性要求：水墨/国画场景图，墨线、宣纸质感、留白和东方色彩必须明显；"
                 "禁止生成真人照片质感、3D渲染、欧美厚涂或现代商业摄影。"
             )
         if "像素" in style_text:
             return (
-                "风格硬性要求：像素风角色设定图，低分辨率像素块边缘、有限色盘、清晰轮廓；"
+                "风格硬性要求：像素风角场景图，低分辨率像素块边缘、有限色盘、清晰轮廓；"
                 "禁止生成真人照片质感、平滑写实绘画或3D渲染。"
             )
         if "写实" in style_text or "电影" in style_text:
             return (
-                "风格硬性要求：电影级写实角色设定图，真实服装材质、自然肤色、真实皮肤纹理和棚拍镜头质感；"
+                "风格硬性要求：电影级写实场景图，真实服装材质、自然肤色、真实皮肤纹理和棚拍镜头质感；"
                 "禁止动漫、卡通、Q版、像素风、厚涂插画或明显游戏原画质感。"
             )
         return (
