@@ -237,7 +237,7 @@ if __name__ == "__main__":
     from core.global_asset_index import GlobalAssetIndex
     from core.project_paths import resolve_project_path
 
-    parser = argparse.ArgumentParser(description="步骤2b：提取章节关键道具信息")
+    parser = argparse.ArgumentParser(description="步骤2：提取章节关键道具信息")
     parser.add_argument("--story-file", default="story.txt", help="小说章节文本路径")
     parser.add_argument("--output-dir", default="output", help="当前章节输出目录")
     parser.add_argument("--chapter-name", default="chapter_01", help="章节文件夹名；留空则直接使用 output-dir")
