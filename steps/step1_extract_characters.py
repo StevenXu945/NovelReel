@@ -10,7 +10,7 @@ PROMPT_EXTRACT_CHARACTERS = """你是一个专业的影视编剧助手。请仔�
 
 要求：
 1. 角色不只限于人类。除人类角色外，多次出现、被命名、对剧情有重要作用、或需要在后续分镜中复用视觉形象的怪物、妖兽、灵兽、鬼怪、傀儡等非人类实体也必须提取为角色资产。
-2. 不要把一次性背景群体、无独立视觉身份的杂兵、纯环境物体提取为角色；但如果某个非人类实体反复出现或有明确外貌特征，就要提取。
+2. 不要把无独立视觉身份的杂兵、纯环境物体提取为角色；但如果某个非人类实体反复出现或有明确外貌特征，就要提取。
 3. 列出每个角色/实体的名字；没有正式名字时，用稳定且具体的称呼，如“黑鳞妖兽”“独眼怪物”，不要用泛称“怪物1”。
 4. 为每个角色撰写详细的“标准定妆照”外貌描述。人类包括：性别、年龄、身高体型、发型发色、五官特征、肤色、长期稳定的标志性特征、自然表情气质；非人类包括：物种/类型、体型尺寸、轮廓、皮毛/鳞甲/皮肤/甲壳质感、头部和五官、角/爪/尾/翅等肢体特征、颜色、长期稳定的标志性特征。
 5. appearance字段只描述角色标准定妆照中的纯外貌特征，不要包含构图、布局、背景、服装、动作、剧情瞬间状态。人类必须明确指出人种（亚洲人/白人/黑人）和性别（男性/女性/男孩/女孩），并保持表情自然；非人类必须明确指出物种/类型和可见性别特征（若无法判断，写“性别特征不明显”），不要硬套人种。
@@ -174,7 +174,7 @@ class CharacterExtractor:
     """步骤1：从小说中提取角色信息"""
 
     def __init__(self, output_dir="output", model="gemini-3.1-pro-preview"):
-        self.llm = LLMClient()
+        self.llm = LLMClient(model=model)
         self.model = model
         self.output_dir = output_dir
         self.save_path = os.path.join(output_dir, "characters.json")
@@ -541,7 +541,9 @@ class CharacterExtractor:
             return "幼年"
         if any(keyword in text for keyword in ("少年", "少女", "青少年")):
             return "少年"
-        if any(keyword in text for keyword in ("中年", "成年", "青年")):
+        if any(keyword in text for keyword in ("青年", "青壮年")):
+            return "青年"
+        if any(keyword in text for keyword in ("中年", "成年")):
             return "中年"
         if any(keyword in text for keyword in ("老年", "老人", "老者", "花甲", "古稀")):
             return "老年"
@@ -552,8 +554,10 @@ class CharacterExtractor:
         age = sum(ages[:2]) / min(len(ages), 2)
         if age <= 12:
             return "幼年"
-        if age <= 25:
+        if age <= 18:
             return "少年"
+        if age <= 35:
+            return "青年"
         if age < 60:
             return "中年"
         return "老年"
