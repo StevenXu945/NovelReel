@@ -2,27 +2,13 @@ import json
 import os
 import re
 import shutil
-from pathlib import Path
 from PIL import Image
-import yaml
 from provider.image_generator import ImageGenerator
 from provider.llm_provider import LLMClient
 from core.project_paths import resolve_previous_asset_dir
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
-
-
-def _load_video_ratio(config_path=None):
-    config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
-    if not config_path.is_absolute():
-        config_path = PROJECT_ROOT / config_path
-    if not config_path.exists():
-        return "16:9"
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f) or {}
-    return str(config.get("video", {}).get("ratio") or "16:9").strip() or "16:9"
+ENVIRONMENT_IMAGE_ASPECT_RATIO = "1:1"
 
 
 PROMPT_PLAN_CHAPTER_ENV_ASSETS = """你是一个连续剧场景资产统筹。请根据本章节分镜里的环境，与截至当前章节前已经建立的全局环境资产对齐，决定每个本章节环境图如何处理。
@@ -69,7 +55,7 @@ class EnvironmentImageGenerator:
         self.env_dir = os.path.join(output_dir, "environments")
         self.save_path = os.path.join(output_dir, "env_images.json")
         self.plan_save_path = os.path.join(output_dir, "env_asset_plan.json")
-        self.aspect_ratio = _load_video_ratio(config_path)
+        self.aspect_ratio = ENVIRONMENT_IMAGE_ASPECT_RATIO
 
 
     def run(self, storyboards, style="写实"):
