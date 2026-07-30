@@ -219,7 +219,7 @@ class EnvironmentImageGenerator:
                     f"参考图1的场景空间结构、建筑/地形布局和美术风格，生成同一地点在本章节的新状态。"
                     f"变化原因：{action_info.get('reason', '')}。本章节环境：{env_desc}。"
                     f"\n{self.build_style_block(style)}\n"
-                    f"画面要求：{self.build_aspect_ratio_prompt()}，不出现人物、角色、文字、字幕、标识或水印。"
+                    f"画面要求：{self.build_shot_prompt()}，不出现人物、角色、文字、字幕、标识或水印。"
                 )
                 print(f"  环境 {env_id} 参考已有环境 {previous_id} 生成新图")
                 result_path, image_url = self.image_gen.generate_reference_image(
@@ -261,12 +261,8 @@ class EnvironmentImageGenerator:
             f"{style_rules}"
         )
 
-    def build_aspect_ratio_prompt(self, shot_type="cinematic shot"):
-        if self.aspect_ratio == "9:16":
-            return f"9:16 竖版短视频环境参考图，vertical {shot_type}"
-        if self.aspect_ratio == "16:9":
-            return f"16:9 横版影视环境参考图，{shot_type}"
-        return f"{self.aspect_ratio} 画幅环境参考图，{shot_type}"
+    def build_shot_prompt(self, shot_type="cinematic shot"):
+        return f"环境参考图，{shot_type}"
 
     def build_style_rules(self, style):
         """把抽象 style 转成强约束，避免基础规则和项目风格互相冲突。"""
@@ -274,7 +270,7 @@ class EnvironmentImageGenerator:
         if any(keyword in style_text for keyword in ("动漫", "动画", "漫画", "手绘", "卡通", "二次元")):
             return (
                 "风格硬性要求：手绘动漫场景图，清晰干净的线稿，统一赛璐璐/手绘上色，"
-                "中式恐怖氛围可通过阴冷配色、夸张表情、诡异细节和光影表现；"
+                "中式恐怖氛围可通过阴冷配色、诡异细节和光影表现；"
                 "禁止生成真人照片质感、电影写实摄影、3D渲染、欧美超写实游戏原画或油画厚涂。"
             )
         if "水墨" in style_text or "国画" in style_text:
@@ -284,13 +280,13 @@ class EnvironmentImageGenerator:
             )
         if "像素" in style_text:
             return (
-                "风格硬性要求：像素风角场景图，低分辨率像素块边缘、有限色盘、清晰轮廓；"
+                "风格硬性要求：像素风场景图，低分辨率像素块边缘、有限色盘、清晰轮廓；"
                 "禁止生成真人照片质感、平滑写实绘画或3D渲染。"
             )
         if "写实" in style_text or "电影" in style_text:
             return (
-                "风格硬性要求：电影级写实场景图，真实服装材质、自然肤色、真实皮肤纹理和棚拍镜头质感；"
-                "禁止动漫、卡通、Q版、像素风、厚涂插画或明显游戏原画质感。"
+                "风格硬性要求：电影级写实场景图，真实建筑材质、自然光影、地形纹理和棚拍镜头质感；"
+                "禁止动漫、卡通、像素风、厚涂插画或明显游戏原画质感。"
             )
         return (
             f"风格硬性要求：所有线条、上色、材质、光影、面部表现和服装细节都必须服务于“{style_text}”；"
@@ -301,7 +297,7 @@ class EnvironmentImageGenerator:
         return (
             f"{self.build_style_block(style)}\n"
             f"当前环境设定：{env_desc}\n"
-            f"画面要求：{self.build_aspect_ratio_prompt('cinematic wide shot')}，高质量，细节丰富；"
+            f"画面要求：{self.build_shot_prompt('cinematic wide shot')}，高质量，细节丰富；"
             "只画静态场景空间、建筑/地形布局、光线、天气、色调和氛围；"
             "不要出现人物、角色、文字、字幕、标识或水印；"
             "整张图必须严格执行本项目统一风格，保持一致的美术风格、线条/材质/光影/色彩分级和后期质感。"
@@ -339,7 +335,7 @@ class EnvironmentImageGenerator:
             f"{reference_instruction}\n"
             f"{camera_instruction}\n"
             f"当前变体环境设定：{env_desc}\n"
-            f"画面要求：{self.build_aspect_ratio_prompt('cinematic shot')}，高质量，细节丰富；"
+            f"画面要求：{self.build_shot_prompt('cinematic shot')}，高质量，细节丰富；"
             "只画静态场景空间、建筑/地形布局、光线、天气、色调、构图方位和氛围；"
             "不要出现人物、角色、文字、字幕、标识或水印；"
             "不能改变原场景的核心地点识别度，不能生成完全不同的新地点；"
