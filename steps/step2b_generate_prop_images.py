@@ -3,7 +3,6 @@ import os
 import shutil
 from provider.image_generator import ImageGenerator
 from core.project_paths import resolve_chapter_output_dir, resolve_previous_asset_dir
-from steps.step1b_generate_char_images import CharacterImageGenerator
 
 
 class PropImageGenerator:
@@ -16,9 +15,38 @@ class PropImageGenerator:
         self.props_dir = os.path.join(output_dir, "props")
         self.save_path = os.path.join(output_dir, "prop_images.json")
 
+    @staticmethod
+    def build_style_rules(style):
+        """把抽象 style 转成道具图的强约束。"""
+        style_text = str(style or "写实").strip()
+        if any(keyword in style_text for keyword in ("动漫", "动画", "漫画", "手绘", "卡通", "二次元")):
+            return (
+                "风格硬性要求：手绘动漫道具设定图，清晰干净的线稿，统一赛璐璐/手绘上色；"
+                "禁止生成真人照片质感、电影写实摄影、3D渲染、欧美超写实游戏原画或油画厚涂。"
+            )
+        if "水墨" in style_text or "国画" in style_text:
+            return (
+                "风格硬性要求：水墨/国画道具设定图，墨线、宣纸质感、留白和东方色彩必须明显；"
+                "禁止生成真人照片质感、3D渲染、欧美厚涂或现代商业摄影。"
+            )
+        if "像素" in style_text:
+            return (
+                "风格硬性要求：像素风道具设定图，低分辨率像素块边缘、有限色盘、清晰轮廓；"
+                "禁止生成真人照片质感、平滑写实绘画或3D渲染。"
+            )
+        if "写实" in style_text or "电影" in style_text:
+            return (
+                "风格硬性要求：电影级写实道具设定图，真实材质纹理、自然光影和棚拍镜头质感；"
+                "禁止动漫、卡通、像素风、厚涂插画或明显游戏原画质感。"
+            )
+        return (
+            f"风格硬性要求：所有线条、上色、材质、光影和细节都必须服务于{style_text}；"
+            "禁止写实摄影、动漫、厚涂、3D、像素等非指定风格混入。"
+        )
+
     def build_prompt(self, prop, style="写实"):
         style = str(style or "写实").strip() or "写实"
-        style_rules = CharacterImageGenerator.build_style_rules(style)
+        style_rules = self.build_style_rules(style)
         visual = prop.get("visual_description", "").rstrip("。")
         function = prop.get("function", "").rstrip("。")
         prop_type = prop.get("prop_type", "")
