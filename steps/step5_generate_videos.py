@@ -35,6 +35,8 @@ class VideoClipGenerator:
         re.compile(r"画面[^，。；,]*(?:出现|浮现|显示|呈现)[^，。；,]*(?:字幕|文字|标题|汉字)[^，。；,]*[，。；,]?"),
         re.compile(r"(?:字幕|文字|标题|汉字)[^，。；,]*(?:出现|浮现|显示|呈现)[^，。；,]*[，。；,]?"),
     )
+    # 匹配 video_prompt 中句首/逗号后对"图1"环境图的文字引用，如"在图1的深夜道观正殿中，"
+    ENV_REF_PATTERN = re.compile(r"(?:^|(?<=[。，,；]))[在于]?图1[^，。；,.]*?[中里][，,]?")
 
     def __init__(self, output_dir="output"):
         self.output_dir = output_dir
@@ -207,6 +209,7 @@ class VideoClipGenerator:
 
     def _build_video_prompt_desc(self, video_prompt, rhythm=""):
         clean_prompt = self._remove_visual_text_instructions(video_prompt)
+        clean_prompt = self._remove_env_ref(clean_prompt)
         rhythm_desc = self._format_rhythm_desc(rhythm)
         # return f"{rhythm_desc}{clean_prompt.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
         return f"{clean_prompt.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
@@ -224,6 +227,10 @@ class VideoClipGenerator:
         motion_desc = motion_desc.replace(f"。{self.MOTION_DESC_CONSTRAINT}", "")
         motion_desc = self._remove_visual_text_instructions(motion_desc)
         return f"{motion_desc.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
+
+    def _remove_env_ref(self, text):
+        """移除 video_prompt 中对'图1'环境图的文字引用，避免视频模型生成纯环境开头。"""
+        return self.ENV_REF_PATTERN.sub("", text)
 
     def _remove_visual_text_instructions(self, text):
         """移除分镜里要求画面显示文字/字幕的正向指令。"""
