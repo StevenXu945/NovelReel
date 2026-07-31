@@ -135,6 +135,7 @@ class VideoClipGenerator:
             # 构建参考图列表
             ref_images = []
             ref_image_urls = []
+            ref_image_paths = []
             img_idx = 1
 
             # 图1：环境图
@@ -142,6 +143,8 @@ class VideoClipGenerator:
             env_path = self._get_env_image_for_storyboard(env_images, env_id)
             if env_path:
                 ref_images.append((img_idx, os.path.basename(env_path)))
+                if os.path.isfile(env_path):
+                    ref_image_paths.append(env_path)
                 env_image_url = self._get_env_image_url_for_storyboard(env_images, env_id)
                 if env_image_url:
                     ref_image_urls.append(env_image_url)
@@ -155,6 +158,7 @@ class VideoClipGenerator:
                 char_path = os.path.join(self.output_dir, "characters", char_img)
                 if os.path.exists(char_path):
                     ref_images.append((img_idx, char_img))
+                    ref_image_paths.append(char_path)
                     char_image_url = character_image_urls.get(str(char_id), "")
                     if char_image_url:
                         ref_image_urls.append(char_image_url)
@@ -167,6 +171,7 @@ class VideoClipGenerator:
                 prop_path = os.path.join(self.output_dir, "props", prop_img)
                 if os.path.exists(prop_path):
                     ref_images.append((img_idx, prop_img))
+                    ref_image_paths.append(prop_path)
                     prop_image_url = prop_image_urls.get(str(prop_id), "")
                     if prop_image_url:
                         ref_image_urls.append(prop_image_url)
@@ -183,8 +188,14 @@ class VideoClipGenerator:
 
             clip_path = os.path.join(self.videos_dir, f"{sb_id}.mp4")
             if use_video_generator:
-                if not ref_image_urls:
-                    print("  跳过生成: 没有可用的参考图 URL")
+                active_video_provider = video_provider or video_generator.provider
+                has_reference_images = (
+                    bool(ref_image_paths)
+                    if active_video_provider == "zenmux"
+                    else bool(ref_image_urls)
+                )
+                if not has_reference_images:
+                    print("  跳过生成: 没有可用的参考图")
                 elif os.path.exists(clip_path):
                     print(f"  视频已存在，跳过生成: {clip_path}")
                 else:
@@ -192,6 +203,7 @@ class VideoClipGenerator:
                         prompt=motion_desc,
                         output_path=clip_path,
                         reference_image_urls=ref_image_urls,
+                        reference_image_paths=ref_image_paths,
                         duration=duration,
                         provider=video_provider,
                     )
