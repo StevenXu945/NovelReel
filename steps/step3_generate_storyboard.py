@@ -140,9 +140,9 @@ PROMPT_GENERATE_STORYBOARD = """你是一个专业的AI短剧导演、小说情�
 class StoryboardGenerator:
     """步骤3：根据小说原文和角色信息，生成分镜稿"""
 
-    def __init__(self, output_dir="output", model="claude-opus-4-6"):
+    def __init__(self, output_dir="output", model=None):
         self.llm = LLMClient(model=model)
-        self.model = model
+        self.model = self.llm.model
         self.output_dir = output_dir
         self.save_path = os.path.join(output_dir, "storyboards.json")
 
@@ -355,7 +355,7 @@ if __name__ == "__main__":
     parser.add_argument("--story-file", default="story.txt", help="小说章节文本路径")
     parser.add_argument("--output-dir", default="output", help="当前章节输出目录")
     parser.add_argument("--chapter-name", default="chapter_01", help="章节文件夹名；留空则直接使用 output-dir")
-    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="LLM 模型")
+    parser.add_argument("--model", default=None, help="LLM 模型；不传时读取 config.yaml")
     parser.add_argument("--not-first-chapter", action="store_true", help="兼容参数；本步骤使用当前章节 characters.json")
     args = parser.parse_args()
 
