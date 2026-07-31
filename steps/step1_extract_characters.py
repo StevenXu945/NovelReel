@@ -173,9 +173,9 @@ PROMPT_AUDIT_CHARACTER_COSTUME_VARIANTS = """你是一个严谨的连续剧角�
 class CharacterExtractor:
     """步骤1：从小说中提取角色信息"""
 
-    def __init__(self, output_dir="output", model="gemini-3.1-pro-preview"):
+    def __init__(self, output_dir="output", model=None):
         self.llm = LLMClient(model=model)
-        self.model = model
+        self.model = self.llm.model
         self.output_dir = output_dir
         self.save_path = os.path.join(output_dir, "characters.json")
 
@@ -586,7 +586,7 @@ if __name__ == "__main__":
     parser.add_argument("--story-file", default="story.txt", help="小说章节文本路径")
     parser.add_argument("--output-dir", default="output", help="当前章节输出目录")
     parser.add_argument("--chapter-name", default="chapter_01", help="章节文件夹名；留空则直接使用 output-dir")
-    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="LLM 模型")
+    parser.add_argument("--model", default=None, help="LLM 模型；不传时读取 config.yaml")
     parser.add_argument("--style", default="盗墓题材写实奇幻动漫", help="人工指定的整体画面风格")
     parser.add_argument("--not-first-chapter", action="store_true", help="标记当前章节不是第一章节")
     parser.add_argument("--global-output-dir", default="", help="全局资产索引目录；默认使用 --output-dir")
