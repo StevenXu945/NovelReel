@@ -29,7 +29,7 @@ class Pipeline:
         6: "拼接最终视频",
     }
 
-    def __init__(self, model="gemini-3.1-pro-preview", output_dir="output", style="动漫",
+    def __init__(self, model=None, output_dir="output", style="动漫",
                  is_first_chapter=True, chapter_name=None, global_output_dir=None,
                  use_video_generator=False, video_provider=None,
                  on_step_start=None, on_step_end=None, on_log=None):
@@ -39,7 +39,6 @@ class Pipeline:
             on_step_end: callback(step_num, step_name, result, elapsed_seconds) — 步骤完成后调用
             on_log: callback(step_num, message) — 步骤执行中的日志
         """
-        self.model = model
         self.style = self._normalize_style(style)
         self.base_output_dir = output_dir
         self.is_first_chapter = is_first_chapter
@@ -56,11 +55,12 @@ class Pipeline:
         os.makedirs(output_dir, exist_ok=True)
 
         self.step1 = CharacterExtractor(output_dir=output_dir, model=model)
+        self.model = self.step1.model
         self.step2 = CharacterImageGenerator(output_dir=output_dir)
-        self.step2b = PropExtractor(output_dir=output_dir, model=model)
+        self.step2b = PropExtractor(output_dir=output_dir, model=self.model)
         self.step2c = PropImageGenerator(output_dir=output_dir)
-        self.step3 = StoryboardGenerator(output_dir=output_dir, model=model)
-        self.step3b = StoryboardAssetAuditor(output_dir=output_dir, model=model)
+        self.step3 = StoryboardGenerator(output_dir=output_dir, model=self.model)
+        self.step3b = StoryboardAssetAuditor(output_dir=output_dir, model=self.model)
         self.step4 = EnvironmentImageGenerator(output_dir=output_dir)
         self.step5 = VideoClipGenerator(output_dir=output_dir)
         self.step6 = VideoConcatenator(output_dir=output_dir)
@@ -273,7 +273,7 @@ if __name__ == "__main__":
     parser.add_argument("--story-file", default="", help="小说章节文本路径；默认第一章 story.txt，后续章节 story_2.txt")
     parser.add_argument("--output-dir", default="output", help="当前章节输出根目录")
     parser.add_argument("--chapter-name", default="", help="章节文件夹名；默认第一章 chapter_01，后续章节 chapter_02")
-    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="LLM 模型")
+    parser.add_argument("--model", default=None, help="LLM 模型；不传时读取 config.yaml")
     parser.add_argument("--style", default="动漫", help="人工指定的整体画面风格")
     parser.add_argument("--not-first-chapter", action="store_true", help="标记当前章节不是第一章节")
     parser.add_argument("--global-output-dir", default="output", help="全局资产索引目录")
