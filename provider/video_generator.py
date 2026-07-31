@@ -2,6 +2,7 @@ import os
 import time
 import yaml
 import requests
+import mimetypes
 
 from pathlib import Path
 from google import genai
@@ -96,6 +97,7 @@ class VideoGeneratorMulti:
         prompt,
         output_path,
         reference_image_urls=None,
+        reference_image_paths=None,
         duration=None,
         generate_audio=None,
         watermark=None,
@@ -116,6 +118,7 @@ class VideoGeneratorMulti:
                 prompt,
                 output_path,
                 reference_image_urls=reference_image_urls,
+                reference_image_paths=reference_image_paths,
                 duration=duration,
                 generate_audio=generate_audio,
             )
@@ -176,6 +179,7 @@ class VideoGeneratorMulti:
         prompt,
         output_path,
         reference_image_urls=None,
+        reference_image_paths=None,
         duration=None,
         generate_audio=None,
     ):
@@ -196,14 +200,12 @@ class VideoGeneratorMulti:
             ),
         )
 
+        reference_images = self._build_zenmux_reference_images(
+            reference_image_paths=reference_image_paths,
+            reference_image_urls=reference_image_urls,
+        )
         config = types.GenerateVideosConfig(
-            reference_images=[
-                types.VideoGenerationReferenceImage(
-                    image=types.Image(gcs_uri=url),
-                    reference_type="ASSET",
-                )
-                for url in (reference_image_urls or [])
-            ],
+            reference_images=reference_images,
             aspect_ratio=self.ratio,
             resolution=self.resolution,
             duration_seconds=duration,
@@ -222,6 +224,9 @@ class VideoGeneratorMulti:
             operation = client.operations.get(operation)
             print(f"[VideoGeneratorMulti:zenmux] 当前状态: done={operation.done}")
 
+        if getattr(operation, "error", None):
+            raise RuntimeError(f"Zenmux 视频生成失败: {operation.error}")
+
         generated_videos = getattr(operation.response, "generated_videos", None) or []
         if not generated_videos:
             raise RuntimeError("Zenmux 视频生成完成，但没有返回 generated_videos")
@@ -229,6 +234,45 @@ class VideoGeneratorMulti:
         video_bytes = self._extract_zenmux_video_bytes(generated_videos[0])
 
         return self._save_video_bytes(video_bytes, output_path)
+
+    def _build_zenmux_reference_images(
+        self,
+        reference_image_paths=None,
+        reference_image_urls=None,
+    ):
+        """Prefer local image bytes so expiring remote URLs are not required."""
+        local_images = []
+        for image_path in reference_image_paths or []:
+            path = Path(image_path)
+            if not path.is_file():
+                print(f"[VideoGeneratorMulti:zenmux] 本地参考图不存在，已跳过: {path}")
+                continue
+
+            mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+            local_images.append(
+                types.VideoGenerationReferenceImage(
+                    image=types.Image(
+                        image_bytes=path.read_bytes(),
+                        mime_type=mime_type,
+                    ),
+                    reference_type="ASSET",
+                )
+            )
+
+        if local_images:
+            print(f"[VideoGeneratorMulti:zenmux] 使用 {len(local_images)} 张本地参考图")
+            return local_images
+
+        remote_images = [
+            types.VideoGenerationReferenceImage(
+                image=types.Image(gcs_uri=url),
+                reference_type="ASSET",
+            )
+            for url in (reference_image_urls or [])
+        ]
+        if remote_images:
+            print(f"[VideoGeneratorMulti:zenmux] 本地参考图不可用，回退到 {len(remote_images)} 个图片 URL")
+        return remote_images
 
     def _backend_config(self, provider):
         if provider == self.provider:
