@@ -98,11 +98,11 @@ PROMPT_AUDIT_STORYBOARD_ASSETS = """你是一个严谨的AI短剧视频 Prompt �
 class StoryboardAssetAuditor:
     """步骤3b：检查并修正分镜稿中的角色、道具和环境资产引用。"""
 
-    def __init__(self, output_dir="output", model="gemini-3.1-pro-preview"):
+    def __init__(self, output_dir="output", model=None):
         self.output_dir = output_dir
-        self.model = model
         self.llm = LLMClient(model=model)
-        self.storyboard_generator = StoryboardGenerator(output_dir=output_dir, model=model)
+        self.model = self.llm.model
+        self.storyboard_generator = StoryboardGenerator(output_dir=output_dir, model=self.model)
         self.save_path = os.path.join(output_dir, "storyboards_asset_audit.json")
 
     def run(self, characters=None, props=None, force=False):
@@ -650,7 +650,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="步骤3b：检查并修正分镜稿资产引用")
     parser.add_argument("--output-dir", default="output", help="当前章节输出目录")
     parser.add_argument("--chapter-name", default="chapter_01", help="章节文件夹名；留空则直接使用 output-dir")
-    parser.add_argument("--model", default="gemini-3.1-pro-preview", help="LLM 模型")
+    parser.add_argument("--model", default=None, help="LLM 模型；不传时读取 config.yaml")
     parser.add_argument("--not-first-chapter", action="store_true", help="兼容参数；本步骤使用当前章节 assets")
     parser.add_argument("--force", action="store_true", help="忽略 storyboards_asset_audit.json 缓存，强制重新检查")
     args = parser.parse_args()
