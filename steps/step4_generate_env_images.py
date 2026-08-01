@@ -49,7 +49,7 @@ class EnvironmentImageGenerator:
     """
 
     def __init__(self, output_dir="output", config_path=None, model="gemini-3.1-pro-preview"):
-        self.image_gen = ImageGenerator(output_dir=output_dir, provider="seedream")
+        self.image_gen = ImageGenerator(output_dir=output_dir)
         self.llm = LLMClient(model=model)
         self.output_dir = output_dir
         self.env_dir = os.path.join(output_dir, "environments")
@@ -83,6 +83,8 @@ class EnvironmentImageGenerator:
             reference_info = env_images.get(str(reference_environment_id), {})
             reference_url = reference_info.get("image_url", "")
             reference_urls = [reference_url] if reference_url else []
+            source_path = reference_info.get("path", "")
+            reference_paths = [source_path] if source_path and os.path.exists(source_path) else []
             prompt = self.build_reference_variant_prompt(
                 env_desc,
                 style,
@@ -99,8 +101,8 @@ class EnvironmentImageGenerator:
                 img_path,
                 aspect_ratio=self.aspect_ratio,
                 force=True,
+                reference_image_paths=reference_paths,
             )
-            source_path = reference_info.get("path", "")
             similarity = self._image_similarity_score(source_path, result_path or img_path)
             if reference_url and similarity is not None and similarity >= 0.9:
                 print(f"  环境 {env_id} 与参考环境 {reference_environment_id} 构图过近，相似度 {similarity:.3f}，加强变体提示重试")
@@ -117,6 +119,7 @@ class EnvironmentImageGenerator:
                     img_path,
                     aspect_ratio=self.aspect_ratio,
                     force=True,
+                    reference_image_paths=reference_paths,
                 )
                 retry_similarity = self._image_similarity_score(source_path, result_path or img_path)
                 if retry_similarity is not None:
@@ -214,6 +217,7 @@ class EnvironmentImageGenerator:
                     img_path,
                     aspect_ratio=self.aspect_ratio,
                     force=True,
+                    reference_image_paths=[previous_path] if previous_path and os.path.exists(previous_path) else [],
                 )
             else:
                 print(f"  环境 {env_id} 生成新环境图")
