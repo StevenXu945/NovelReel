@@ -20,7 +20,7 @@ class CharacterImageGenerator:
     )
 
     def __init__(self, output_dir="output"):
-        self.image_gen = ImageGenerator(output_dir=output_dir, provider="seedream")
+        self.image_gen = ImageGenerator(output_dir=output_dir)
         self.output_dir = output_dir
         self.chars_dir = os.path.join(output_dir, "characters")
         self.save_path = os.path.join(output_dir, "character_images.json")
@@ -127,10 +127,11 @@ class CharacterImageGenerator:
             reference_url = reference_info.get("image_url", "")
             reference_path = reference_info.get("path", "")
             reference_urls = [reference_url] if reference_url else []
+            reference_paths = [reference_path] if reference_path and os.path.exists(reference_path) else []
             if action == "new_variant":
-                if not reference_urls:
+                if not reference_urls and not reference_paths:
                     print(
-                        f"  错误：换装角色 [{name}] 未找到同章基础造型 [{previous_name}] 的图片URL，"
+                        f"  错误：换装角色 [{name}] 未找到同章基础造型 [{previous_name}] 的参考图片，"
                         "为避免角色漂移，本次不退回文生图"
                     )
                     continue
@@ -157,6 +158,7 @@ class CharacterImageGenerator:
                 save_path=save_path,
                 force=should_regenerate or uses_reference,
                 reference_image_urls=reference_urls,
+                reference_image_paths=reference_paths,
             )
 
             if result_path and os.path.exists(save_path):
@@ -233,10 +235,13 @@ class CharacterImageGenerator:
             full_prompt = self.build_prompt(char, style)
             uses_reference = action in {"update", "new_variant"}
             reference_urls = [previous_url] if uses_reference and previous_url else []
+            reference_paths = [
+                previous_path
+            ] if uses_reference and previous_path and os.path.exists(previous_path) else []
             if action == "new_variant":
-                if not reference_urls:
+                if not reference_urls and not reference_paths:
                     print(
-                        f"  错误：换装角色 [{name}] 未找到基础造型 [{previous_name}] 的图片URL，"
+                        f"  错误：换装角色 [{name}] 未找到基础造型 [{previous_name}] 的参考图片，"
                         "为避免角色漂移，本次不退回文生图"
                     )
                     continue
@@ -264,6 +269,7 @@ class CharacterImageGenerator:
                 save_path=save_path,
                 force=True,
                 reference_image_urls=reference_urls,
+                reference_image_paths=reference_paths,
             )
 
             if result_path and os.path.exists(save_path):
