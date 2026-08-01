@@ -7,19 +7,23 @@ llm:
   max_output_tokens:
 
 image:
-  provider: seedream
+  provider: zenmux
   seedream:
     base_url: https://ark.cn-beijing.volces.com/api/v3
     api_key: your api-key
     model: doubao-seedream-5-0-260128
-    multi_view_size: 2K
     sizes:
       "16:9": 2848x1600
       "9:16": 1600x2848
       "1:1": 2048x2048
+  zenmux:
+    base_url: https://zenmux.ai/api/vertex-ai
+    api_key: your api-key
+    model: bytedance/doubao-seedream-5.0-pro
+    image_size: 2K
 
 video:
-  provider: ark
+  provider: zenmux
   ratio: "16:9"
   resolution: 480p
   poll_interval: 30
