@@ -10,7 +10,7 @@ class PropImageGenerator:
     BASE_VISUAL_BIBLE = ""
 
     def __init__(self, output_dir="output"):
-        self.image_gen = ImageGenerator(output_dir=output_dir, provider="seedream")
+        self.image_gen = ImageGenerator(output_dir=output_dir)
         self.output_dir = output_dir
         self.props_dir = os.path.join(output_dir, "props")
         self.save_path = os.path.join(output_dir, "prop_images.json")
@@ -146,6 +146,7 @@ class PropImageGenerator:
                     save_path,
                     aspect_ratio="1:1",
                     force=True,
+                    reference_image_paths=[previous_path] if previous_path and os.path.exists(previous_path) else [],
                 )
             else:
                 print(f"  道具 [{name}] 生成新增道具图")
