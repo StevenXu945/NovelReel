@@ -2,17 +2,18 @@ import os
 from pathlib import Path
 import requests
 import yaml
+import mimetypes
 from urllib.parse import urlparse
 
+from google import genai
+from google.genai import types
 from volcenginesdkarkruntime import Ark
-from volcenginesdkarkruntime.types.images.images import SequentialImageGenerationOptions
 
 
 DEFAULT_SEEDREAM_CONFIG = {
     "base_url": "https://ark.cn-beijing.volces.com/api/v3",
     "api_key": "",
     "model": "doubao-seedream-5-0-260128",
-    "multi_view_size": "2K",
     "sizes": {
         "16:9": "2848x1600",
         "9:16": "1600x2848",
@@ -23,6 +24,12 @@ DEFAULT_SEEDREAM_CONFIG = {
 DEFAULT_IMAGE_CONFIG = {
     "provider": "seedream",
     "seedream": DEFAULT_SEEDREAM_CONFIG,
+    "zenmux": {
+        "base_url": "https://zenmux.ai/api/vertex-ai",
+        "api_key": "",
+        "model": "bytedance/doubao-seedream-5.0-pro",
+        "image_size": "2K",
+    },
 }
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -57,16 +64,8 @@ def _load_image_config(config_path):
     return _deep_merge(DEFAULT_IMAGE_CONFIG, config.get("image", {}))
 
 
-def _legacy_seedream_sizes():
-    return {
-        "16:9": "2848x1600",
-        "9:16": "1600x2848",
-        "1:1": "2048x2048",
-    }
-
-
 class ImageGenerator(object):
-    """图像生成模型，使用 seedream (Volcengine Ark API)
+    """图像生成模型，支持 Seedream Ark 与 Zenmux。
 
     功能：文生图，用于生成角色图和环境图
     """
@@ -75,27 +74,41 @@ class ImageGenerator(object):
         """
         Args:
             output_dir: 输出目录
-            provider: 生图引擎，目前仅支持 "seedream"；不传时读取项目根目录的 config.yaml
+            provider: 生图引擎，支持 "seedream"、"zenmux"；不传时读取 config.yaml
             config_path: 配置文件路径
         """
         self.output_dir = output_dir
         image_config = _load_image_config(config_path)
         self.provider = provider or image_config.get("provider", "seedream")
-        if self.provider != "seedream":
+        if self.provider not in {"seedream", "zenmux"}:
             raise ValueError(f"Unsupported image provider: {self.provider}")
 
-        seedream_config = image_config.get("seedream", {})
-        self.seedream_model = seedream_config.get("model")
-        self.seedream_sizes = seedream_config.get("sizes") or _legacy_seedream_sizes()
-        self.seedream_multi_view_size = seedream_config.get("multi_view_size", "2K")
-        api_key = seedream_config.get("api_key", "")
-        if not api_key:
-            raise ValueError("Missing image.seedream.api_key in config.yaml")
-
-        self.ark_client = Ark(
-            base_url=seedream_config.get("base_url"),
-            api_key=api_key,
-        )
+        if self.provider == "seedream":
+            seedream_config = image_config.get("seedream", {})
+            self.seedream_model = seedream_config.get("model")
+            self.seedream_sizes = seedream_config["sizes"]
+            api_key = seedream_config.get("api_key", "") or os.environ.get("ARK_API_KEY")
+            if not api_key:
+                raise ValueError("Missing image.seedream.api_key in config.yaml or ARK_API_KEY")
+            self.ark_client = Ark(
+                base_url=seedream_config.get("base_url"),
+                api_key=api_key,
+            )
+        else:
+            zenmux_config = image_config.get("zenmux", {})
+            self.zenmux_model = zenmux_config.get("model")
+            self.zenmux_image_size = zenmux_config.get("image_size", "2K")
+            api_key = zenmux_config.get("api_key", "") or os.environ.get("ZENMUX_API_KEY")
+            if not api_key:
+                raise ValueError("Missing image.zenmux.api_key in config.yaml or ZENMUX_API_KEY")
+            self.zenmux_client = genai.Client(
+                api_key=api_key,
+                vertexai=True,
+                http_options=types.HttpOptions(
+                    api_version="v1",
+                    base_url=zenmux_config.get("base_url"),
+                ),
+            )
 
     def _text_to_image(self, prompt, save_path, aspect_ratio="16:9", force=False):
         """文生图，根据 provider 选择不同的生图引擎
@@ -108,14 +121,34 @@ class ImageGenerator(object):
 
         Returns:
             tuple: (保存的图片路径, image_url)，失败返回 ("", "")
-                   image_url 为 seedream 返回的远程 URL
+                   Seedream 返回远程 URL；Zenmux 直接返回图片字节，因此 URL 为空
         """
         if os.path.exists(save_path) and not force:
             print(f"  图片已存在，跳过: {save_path}")
             return save_path, ""
 
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        if self.provider == "zenmux":
+            return self._text_to_image_zenmux(prompt, save_path, aspect_ratio)
         return self._text_to_image_seedream(prompt, save_path, aspect_ratio)
+
+    def _text_to_image_zenmux(self, prompt, save_path, aspect_ratio="16:9"):
+        """通过 Zenmux Google GenAI 兼容端点文生图。"""
+        try:
+            response = self.zenmux_client.models.generate_images(
+                model=self.zenmux_model,
+                prompt=prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio=aspect_ratio,
+                    image_size=self.zenmux_image_size,
+                    add_watermark=False,
+                ),
+            )
+            return self._save_zenmux_generated_image(response, save_path)
+        except Exception as e:
+            print(f"  Zenmux 生图失败: {e}")
+            return "", ""
 
     def _text_to_image_seedream(self, prompt, save_path, aspect_ratio="16:9"):
         """调用 Volcengine Ark API (seedream) 文生图"""
@@ -186,7 +219,122 @@ class ImageGenerator(object):
             print(f"  参考图生图失败: {e}")
             return "", ""
 
-    def generate_character_image(self, character_description, save_path=None, force=False, reference_image_urls=None):
+    def _image_to_image(
+        self,
+        prompt,
+        image_urls,
+        save_path,
+        aspect_ratio="16:9",
+        force=False,
+        image_paths=None,
+    ):
+        if self.provider == "zenmux":
+            return self._image_to_image_zenmux(
+                prompt,
+                image_urls,
+                save_path,
+                aspect_ratio=aspect_ratio,
+                force=force,
+                image_paths=image_paths,
+            )
+        return self._image_to_image_seedream(
+            prompt,
+            image_urls,
+            save_path,
+            aspect_ratio=aspect_ratio,
+            force=force,
+        )
+
+    def _image_to_image_zenmux(
+        self,
+        prompt,
+        image_urls,
+        save_path,
+        aspect_ratio="16:9",
+        force=False,
+        image_paths=None,
+    ):
+        """通过 Zenmux 使用本地图片字节（优先）或远程 URL 图生图。"""
+        if os.path.exists(save_path) and not force:
+            print(f"  图片已存在，跳过: {save_path}")
+            return save_path, ""
+
+        reference_images = []
+        for image_path in image_paths or []:
+            path = Path(image_path)
+            if not path.is_file():
+                continue
+            mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+            reference_images.append(
+                types.RawReferenceImage(
+                    reference_image=types.Image(
+                        image_bytes=path.read_bytes(),
+                        mime_type=mime_type,
+                    )
+                )
+            )
+
+        if not reference_images:
+            for url in image_urls or []:
+                if not isinstance(url, str) or urlparse(url).scheme not in {"http", "https"}:
+                    continue
+                try:
+                    response = requests.get(url, timeout=120)
+                    response.raise_for_status()
+                    mime_type = response.headers.get("Content-Type", "").split(";")[0] or "image/png"
+                    reference_images.append(
+                        types.RawReferenceImage(
+                            reference_image=types.Image(
+                                image_bytes=response.content,
+                                mime_type=mime_type,
+                            )
+                        )
+                    )
+                except Exception as e:
+                    print(f"  Zenmux 参考图下载失败，已跳过: {e}")
+
+        if not reference_images:
+            return self._text_to_image(prompt, save_path, aspect_ratio=aspect_ratio, force=force)
+
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        try:
+            response = self.zenmux_client.models.edit_image(
+                model=self.zenmux_model,
+                prompt=prompt,
+                reference_images=reference_images,
+                config=types.EditImageConfig(
+                    number_of_images=1,
+                    aspect_ratio=aspect_ratio,
+                    add_watermark=False,
+                ),
+            )
+            return self._save_zenmux_generated_image(response, save_path)
+        except Exception as e:
+            print(f"  Zenmux 参考图生图失败: {e}")
+            return "", ""
+
+    def _save_zenmux_generated_image(self, response, save_path):
+        generated_images = getattr(response, "generated_images", None) or []
+        if not generated_images:
+            raise RuntimeError("Zenmux 生图完成，但没有返回 generated_images")
+        image = getattr(generated_images[0], "image", None)
+        image_bytes = getattr(image, "image_bytes", None)
+        if not image_bytes:
+            raise RuntimeError("Zenmux 生图完成，但没有返回图片字节")
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "wb") as f:
+            f.write(image_bytes)
+        print(f"  图片已保存: {save_path}")
+        return save_path, ""
+
+    def generate_character_image(
+        self,
+        character_description,
+        save_path=None,
+        force=False,
+        reference_image_urls=None,
+        reference_image_paths=None,
+    ):
         """根据角色描述生成全身形象图（白色背景）
 
         Returns:
@@ -195,123 +343,32 @@ class ImageGenerator(object):
         if save_path is None:
             os.makedirs(os.path.join(self.output_dir, "characters"), exist_ok=True)
             save_path = os.path.join(self.output_dir, "characters", "char_auto.png")
-        if reference_image_urls:
-            return self._image_to_image_seedream(
+        if reference_image_urls or reference_image_paths:
+            return self._image_to_image(
                 character_description,
                 reference_image_urls,
                 save_path,
                 aspect_ratio="16:9",
                 force=force,
+                image_paths=reference_image_paths,
             )
         return self._text_to_image(character_description, save_path, aspect_ratio="16:9", force=force)
 
-    def generate_reference_image(self, prompt, reference_image_urls, save_path, aspect_ratio="16:9", force=False):
+    def generate_reference_image(
+        self,
+        prompt,
+        reference_image_urls,
+        save_path,
+        aspect_ratio="16:9",
+        force=False,
+        reference_image_paths=None,
+    ):
         """根据参考图生成图片；没有可用 URL 时自动回退到文生图。"""
-        return self._image_to_image_seedream(
+        return self._image_to_image(
             prompt,
             reference_image_urls,
             save_path,
             aspect_ratio=aspect_ratio,
             force=force,
+            image_paths=reference_image_paths,
         )
-
-    def generate_multi_view_environment(self, env_desc, view_count, save_dir, env_id, style="写实"):
-        """使用 seedream 多图生成同一环境的多个视角图
-
-        Args:
-            env_desc: 环境描述文本
-            view_count: 需要生成的视角数量（1-4）
-            save_dir: 图片保存目录
-            env_id: 环境ID，用于文件命名
-            style: 画面风格
-
-        Returns:
-            list[dict]: 每个视角的信息 [{"path": ..., "image_url": ..., "view_index": 1}, ...]
-        """
-        os.makedirs(save_dir, exist_ok=True)
-        view_count = max(1, min(4, view_count))
-
-        # 如果只需要1张，走普通单图生成
-        if view_count == 1:
-            prompt = f"{style}风格，{env_desc}, no people, no characters, cinematic, wide shot, high quality, detailed"
-            save_path = os.path.join(save_dir, f"env_{env_id:03d}_v1.png")
-            result_path, image_url = self._text_to_image(prompt, save_path, aspect_ratio="16:9")
-            return [{"path": result_path or save_path, "image_url": image_url, "view_index": 1}]
-
-        # 多视角：用 seedream 多图生成
-        prompt = (
-            f"{style}风格，生成{view_count}张同一场景不同视角/机位的图片。"
-            f"场景描述：{env_desc}。"
-            f"要求：每张图展示该场景的不同拍摄角度（如正面全景、侧面、俯瞰、仰视等），"
-            f"保持场景一致但视角不同。no people, no characters, cinematic, high quality, detailed"
-        )
-
-        # 检查是否已有缓存
-        existing = []
-        for i in range(1, view_count + 1):
-            p = os.path.join(save_dir, f"env_{env_id:03d}_v{i}.png")
-            if os.path.exists(p):
-                existing.append({"path": p, "image_url": "", "view_index": i})
-        if len(existing) == view_count:
-            print(f"  环境 {env_id} 的 {view_count} 张视角图已存在，跳过")
-            return existing
-
-        try:
-            response = self.ark_client.images.generate(
-                model=self.seedream_model,
-                prompt=prompt,
-                size=self.seedream_multi_view_size,
-                sequential_image_generation="auto",
-                sequential_image_generation_options=SequentialImageGenerationOptions(
-                    max_images=view_count
-                ),
-                response_format="url",
-                watermark=False,
-            )
-
-            results = []
-            for i, image_data in enumerate(response.data, start=1):
-                save_path = os.path.join(save_dir, f"env_{env_id:03d}_v{i}.png")
-                img_resp = requests.get(image_data.url, timeout=120)
-                img_resp.raise_for_status()
-                with open(save_path, "wb") as f:
-                    f.write(img_resp.content)
-                results.append({
-                    "path": save_path,
-                    "image_url": image_data.url,
-                    "view_index": i,
-                })
-                print(f"  环境 {env_id} 视角{i} 已保存: {save_path}")
-
-            # 如果返回的图片数少于请求数，补充生成
-            while len(results) < view_count:
-                idx = len(results) + 1
-                fallback_prompt = (
-                    f"{style}风格，{env_desc}, 从不同角度拍摄（视角{idx}），"
-                    f"no people, no characters, cinematic, high quality, detailed"
-                )
-                save_path = os.path.join(save_dir, f"env_{env_id:03d}_v{idx}.png")
-                result_path, image_url = self._text_to_image(fallback_prompt, save_path, aspect_ratio="16:9")
-                results.append({
-                    "path": result_path or save_path,
-                    "image_url": image_url,
-                    "view_index": idx,
-                })
-
-            return results
-        except Exception as e:
-            print(f"  多视角生成失败，回退到逐张生成: {e}")
-            results = []
-            for i in range(1, view_count + 1):
-                fallback_prompt = (
-                    f"{style}风格，{env_desc}, 从不同角度拍摄（视角{i}），"
-                    f"no people, no characters, cinematic, high quality, detailed"
-                )
-                save_path = os.path.join(save_dir, f"env_{env_id:03d}_v{i}.png")
-                result_path, image_url = self._text_to_image(fallback_prompt, save_path, aspect_ratio="16:9")
-                results.append({
-                    "path": result_path or save_path,
-                    "image_url": image_url,
-                    "view_index": i,
-                })
-            return results
