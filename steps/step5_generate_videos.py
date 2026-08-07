@@ -31,6 +31,10 @@ class VideoClipGenerator:
     """
 
     MOTION_DESC_CONSTRAINT = "要求：不要有背景音乐；画面上禁止出现任何文字、字幕、标题、标识或水印。"
+    CONTENT_SAFETY_CONSTRAINT = (
+        "内容尺度：避免直接展示器官、贯穿伤、肢解、皮肉撕裂、眼球损伤及大量血液或体液飞溅；"
+        "暴力情节使用遮挡、剪影、镜外动作、声音和反应镜头含蓄表现，同时保留剧情结果。"
+    )
     STYLE_PREFIX_PATTERN = re.compile(r"^\s*视觉画面风格为[^。]+风格[。.]?\s*")
     VISUAL_TEXT_PATTERNS = (
         re.compile(r"画面[^，。；,]*(?:出现|浮现|显示|呈现)[^，。；,]*(?:字幕|文字|标题|汉字)[^，。；,]*[，。；,]?"),
@@ -224,10 +228,14 @@ class VideoClipGenerator:
         clean_prompt = self._remove_visual_text_instructions(video_prompt)
         clean_prompt = self._remove_env_ref(clean_prompt)
         clean_prompt = self.STYLE_PREFIX_PATTERN.sub("", clean_prompt)
+        clean_prompt = self._remove_final_constraints(clean_prompt)
         rhythm_desc = self._format_rhythm_desc(rhythm)
         # return f"{rhythm_desc}{clean_prompt.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
         style_constraint = self._build_style_constraint(style)
-        return f"{style_constraint}{clean_prompt.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
+        return (
+            f"{style_constraint}{clean_prompt.rstrip('。')}。"
+            f"{self.CONTENT_SAFETY_CONSTRAINT}{self.MOTION_DESC_CONSTRAINT}"
+        )
 
     @staticmethod
     def _build_style_constraint(style):
@@ -254,10 +262,17 @@ class VideoClipGenerator:
         return style or "动漫"
 
     def _normalize_motion_desc(self, motion_desc):
-        motion_desc = motion_desc.replace(f"，{self.MOTION_DESC_CONSTRAINT}", "")
-        motion_desc = motion_desc.replace(f"。{self.MOTION_DESC_CONSTRAINT}", "")
         motion_desc = self._remove_visual_text_instructions(motion_desc)
-        return f"{motion_desc.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
+        motion_desc = self._remove_final_constraints(motion_desc)
+        return (
+            f"{motion_desc.rstrip('。')}。"
+            f"{self.CONTENT_SAFETY_CONSTRAINT}{self.MOTION_DESC_CONSTRAINT}"
+        )
+
+    def _remove_final_constraints(self, text):
+        for constraint in (self.CONTENT_SAFETY_CONSTRAINT, self.MOTION_DESC_CONSTRAINT):
+            text = text.replace(constraint, "")
+        return text.rstrip("，。； ")
 
     def _remove_env_ref(self, text):
         """移除 video_prompt 中对'图1'环境图的文字引用，避免视频模型生成纯环境开头。"""
