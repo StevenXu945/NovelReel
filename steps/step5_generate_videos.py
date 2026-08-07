@@ -31,6 +31,7 @@ class VideoClipGenerator:
     """
 
     MOTION_DESC_CONSTRAINT = "要求：不要有背景音乐；画面上禁止出现任何文字、字幕、标题、标识或水印。"
+    STYLE_PREFIX_PATTERN = re.compile(r"^\s*视觉画面风格为[^。]+风格[。.]?\s*")
     VISUAL_TEXT_PATTERNS = (
         re.compile(r"画面[^，。；,]*(?:出现|浮现|显示|呈现)[^，。；,]*(?:字幕|文字|标题|汉字)[^，。；,]*[，。；,]?"),
         re.compile(r"(?:字幕|文字|标题|汉字)[^，。；,]*(?:出现|浮现|显示|呈现)[^，。；,]*[，。；,]?"),
@@ -180,7 +181,7 @@ class VideoClipGenerator:
 
             # 打印视频描述
             if sb.get("video_prompt"):
-                motion_desc = self._build_video_prompt_desc(scene_desc, rhythm=rhythm)
+                motion_desc = self._build_video_prompt_desc(scene_desc, rhythm=rhythm, style=style)
             else:
                 motion_desc = ""
 
@@ -219,12 +220,30 @@ class VideoClipGenerator:
         self.save(video_clips)
         return video_clips
 
-    def _build_video_prompt_desc(self, video_prompt, rhythm=""):
+    def _build_video_prompt_desc(self, video_prompt, rhythm="", style="动漫"):
         clean_prompt = self._remove_visual_text_instructions(video_prompt)
         clean_prompt = self._remove_env_ref(clean_prompt)
+        clean_prompt = self.STYLE_PREFIX_PATTERN.sub("", clean_prompt)
         rhythm_desc = self._format_rhythm_desc(rhythm)
         # return f"{rhythm_desc}{clean_prompt.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
-        return f"{clean_prompt.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
+        style_constraint = self._build_style_constraint(style)
+        return f"{style_constraint}{clean_prompt.rstrip('。')}。{self.MOTION_DESC_CONSTRAINT}"
+
+    @staticmethod
+    def _build_style_constraint(style):
+        """把项目风格转换成提交给视频模型的简短、确定性约束。"""
+        style_text = str(style or "动漫").strip() or "动漫"
+        if any(keyword in style_text for keyword in ("动漫", "动画", "漫画", "手绘", "卡通", "二次元")):
+            rule = "手绘动漫，清晰线稿与赛璐璐上色，禁止真人摄影、3D和厚涂质感"
+        elif "水墨" in style_text or "国画" in style_text:
+            rule = "水墨国画，突出墨线、宣纸质感、留白与东方色彩，禁止真人摄影和3D质感"
+        elif "像素" in style_text:
+            rule = "像素风，保持像素块边缘、有限色盘与清晰轮廓，禁止平滑写实和3D质感"
+        elif "写实" in style_text or "电影" in style_text:
+            rule = "电影级写实，保持真实材质、自然光影与摄影质感，禁止动漫、像素和厚涂质感"
+        else:
+            rule = f"严格采用“{style_text}”，禁止混入其他视觉风格"
+        return f"统一视频风格：{rule}。"
 
     def _format_rhythm_desc(self, rhythm):
         rhythm = str(rhythm or "").strip()
