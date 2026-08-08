@@ -70,7 +70,16 @@ class PropImageGenerator:
             name = prop["name"]
             prop_id = prop["id"]
             save_path = os.path.join(self.props_dir, f"prop_{prop_id}.png")
-            if name in prop_images and os.path.exists(save_path):
+            if os.path.exists(save_path):
+                if name not in prop_images:
+                    prop_images[name] = {
+                        "path": save_path,
+                        "image_url": "",
+                        "prompt": "",
+                        "prop_id": prop_id,
+                        "asset_action": prop.get("asset_action", "new"),
+                        "asset_reason": prop.get("asset_reason", ""),
+                    }
                 print(f"  道具 [{name}] (prop#{prop_id}) 图片已存在，跳过")
                 continue
 
@@ -108,7 +117,17 @@ class PropImageGenerator:
             previous_name = prop.get("previous_name") or name
             save_path = os.path.join(self.props_dir, f"prop_{prop_id}.png")
 
-            if name in prop_images and os.path.exists(save_path):
+            if os.path.exists(save_path):
+                if name not in prop_images:
+                    prop_images[name] = {
+                        "path": save_path,
+                        "image_url": "",
+                        "prompt": "",
+                        "prop_id": prop_id,
+                        "asset_action": action,
+                        "asset_reason": prop.get("asset_reason", ""),
+                        "source_path": "",
+                    }
                 print(f"  道具 [{name}] (prop#{prop_id}) 图片已存在，跳过")
                 continue
 
