@@ -75,6 +75,17 @@ class EnvironmentImageGenerator:
         reference_environment_id = env.get("reference_environment_id")
         img_path = os.path.join(self.env_dir, f"env_{int(env_id):03d}.png")
 
+        if os.path.exists(img_path):
+            env_images.setdefault(str(env_id), {
+                "path": img_path,
+                "image_url": "",
+                "prompt": self.build_prompt(env_desc, style),
+                "environment_description": env_desc,
+                "asset_action": "existing",
+            })
+            print(f"  环境 {env_id} 图片已存在，跳过")
+            return
+
         if str(env_id) in env_images:
             print(f"  环境 {env_id} 已生成，跳过")
             return
@@ -183,6 +194,20 @@ class EnvironmentImageGenerator:
             previous_info = previous_envs.get(str(previous_id), {}) if previous_id is not None else {}
             img_path = os.path.join(self.env_dir, f"env_{int(env_id):03d}.png")
             prompt = self.build_prompt(env_desc, style)
+
+            if os.path.exists(img_path):
+                env_images[str(env_id)] = {
+                    "path": img_path,
+                    "image_url": "",
+                    "prompt": prompt,
+                    "environment_description": env_desc,
+                    "asset_action": action,
+                    "asset_reason": action_info.get("reason", ""),
+                    "source_path": "",
+                    "previous_environment_id": previous_id,
+                }
+                print(f"  环境 {env_id} 图片已存在，跳过")
+                continue
 
             previous_path = previous_info.get("path", "")
             previous_url = previous_info.get("image_url", "")
