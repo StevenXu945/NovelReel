@@ -10,7 +10,7 @@ from steps.step2_extract_props import PropExtractor
 from steps.step3_generate_storyboard import StoryboardGenerator
 
 
-PROMPT_AUDIT_STORYBOARD_ASSETS = """你是一个严谨的AI短剧视频 Prompt 资产引用检查员。请检查每个视频片段 Prompt 中的角色图、道具图和环境图引用是否准确，既要补充遗漏，也要删除多余引用。
+PROMPT_AUDIT_STORYBOARD_ASSETS = """你是一个严谨的AI短剧视频 Prompt 资产引用与内容尺度检查员。请检查每个视频片段 Prompt 中的角色图、道具图和环境图引用是否准确，并检查暴力内容的呈现尺度；既要补充遗漏、删除多余引用，也要改写不合格的重度血腥描写。
 
 检查目标：
 1. 如果某个片段的 video_prompt 中明确出现了【已有角色】的视觉实体，但 character_ids 没有包含该角色 id，则补充该 id。
@@ -27,10 +27,11 @@ PROMPT_AUDIT_STORYBOARD_ASSETS = """你是一个严谨的AI短剧视频 Prompt �
    - 图1 永远是 environment_id 对应的环境图。
    - 图2、图3... 必须严格按 character_ids 顺序映射到角色图。
    - 角色图之后继续按 prop_ids 顺序映射到道具图。
+   - 资产 id 不是图号。例如 character_ids=[8,2]、prop_ids=[11] 时，角色 8=图2、角色 2=图3、道具 11=图4；严禁写成图8、图2、图11。
    - 如果补充了角色 id，video_prompt 中新出现的该角色必须改成对应图号，例如补充第三个角色后应使用“图4中的角色”。
    - 如果补充了道具 id，video_prompt 中新出现的该道具必须改成“图x中的道具”。
    - 如果删除了角色 id 或道具 id，必须把 video_prompt 中剩余角色和道具的图号重新编号；不要保留跳号或旧图号。
-   - 只能调整图号引用、角色/道具 id 列表，以及与图号绑定的极少量文字；不要改剧情、动作、对白和叙事内容。
+   - 除下述内容尺度改写外，只能调整图号引用、角色/道具 id 列表，以及与图号绑定的极少量文字；不要改剧情、动作、对白和叙事内容。
 12. 如果 character_ids、prop_ids 和 environment_id 已经正确，但 video_prompt 的图号引用与它们不一致，也要返回修正后的 video_prompt。
 13. 修正后的 video_prompt 仍然禁止使用角色姓名；角色第一次出场、切换到另一个角色、或容易混淆主语时，必须保留“图x中的角色”作为主语。同一个角色的一组连续动作、表情变化或对白，可以只在第一个动作/第一句对白前保留“图x中的角色”，后续连续动作可以省略重复主语；不能用“他/她/少年/老人/师父/男孩”等代词或称呼替代。
 14. 修正后的 video_prompt 中所有道具引用都必须写成“图x中的道具”，不能写“图x中的符纸/战刀/木柴”等带道具名称的表达。
@@ -38,6 +39,9 @@ PROMPT_AUDIT_STORYBOARD_ASSETS = """你是一个严谨的AI短剧视频 Prompt �
 16. 修正后的 video_prompt 中镜头语言只描述客观镜头和分镜形式，不能加入“为了表现/用于突出/体现/展现/这个片段属于/该片段属于”等意图解释或总结判断；“镜头采用/分镜采用/镜头语言采用”后面只能接客观镜头类型、运镜方式、剪辑速度或分镜形式，不能接角色、道具、图号、人物动作或剧情对象；video_prompt 末尾的镜头/分镜描述段不能出现“图x中的角色”“图x中的道具”或具体角色、道具、动作内容。
 16.1 对照输入的“角色图索引”和“道具图索引”检查所有 environment 字段。environment 只能描述普通背景空间、建筑、地形、天气、光线、色调、氛围和稳定背景物，严禁包含索引中任何已有角色或已有道具的资产信息：不得出现已有角色的姓名、身份、年龄、外貌、服装、动作或其描述改写，也不得出现已有道具的名称、外形、材质、颜色、纹理、功能、状态或其描述改写。
 16.2 如果 environment 混入了已有角色或已有道具的资产信息，必须在 corrections 中返回清理后的 environment：只删除或改写与索引资产匹配的部分，保留普通背景物、原地点识别度、建筑/地形空间关系、天气、光线、色调和氛围。被移除的已有角色、已有道具及其状态只能保留在 video_prompt 中。不得为了清理 environment 而删除、改写 video_prompt 中的剧情或动作。
+16.3 必须逐条检查 video_prompt 的内容尺度。必须保留原剧情中的冲突、攻击、受伤、死亡、脱困和因果结果，但不得直接描写或要求画面展示以下重度血腥内容：器官或脏器暴露、贯穿伤口、肢解或断肢、皮肉撕裂、眼球爆裂或损伤、伤口内部、大量血液、腐液或其他体液飞溅/流出，以及身体被从内部撕开的过程。
+16.4 命中上述内容时，即使 character_ids、prop_ids、environment_id 和图号都正确，也必须在 corrections 中返回改写后的完整 video_prompt。改用遮挡、剪影、镜外动作、短暂切黑、声音反馈、角色反应、环境受影响或事后状态含蓄表现；不能在写了“遮挡式构图”“避开细节”之后，继续明确描述眼球爆裂、刺穿后脑、撕开皮肉、脏器、伤口或体液飞溅。
+16.5 内容尺度改写不能改变谁攻击谁、使用什么关键道具、动作先后、角色是否受伤/死亡/脱困、关键对白和片段结尾状态。可以把“刺穿具体身体部位”改成“攻击命中后角色遭受重创”，把直接撕裂过程改成遮挡或镜外发生，并用声音、剪影和反应镜头交代结果。
 17. 检查是否存在连续超过 3 个视频片段使用同一个 environment_id、且环境图描述完全相同或实际指向同一张环境图的情况；这不是必然错误，需要结合后续片段剧情判断是否应该继续复用，还是需要基于当前场景图生成同场景变体图。
 18. 当第 4 个及后续连续片段仍发生在同一地点时，请判断当前片段剧情是否已经转移到原场景内不同观察方向、不同局部空间、不同建筑区域、不同地形范围或不同机位；如果是，应优先改用 storyboards 中已经存在的同场景变体环境 id；如果没有可用变体 id，可以在 corrections 中从当前已有最大 environment_id + 1 开始新增同场景图生图变体 environment_id。判断时可以参考 video_prompt 中的剧情发生点，但生成的 environment 描述不得写入角色图索引或道具图索引中的已有资产信息。
 19. 同场景变体环境的目标是使用图生图方法参考当前/原环境图，保持地点、时代、风格、光线主基调、材质和空间连续性，同时根据当前片段剧情调整视角、局部细节、取景区域、景别距离、机位高度、前中后景关系或主要光源位置。
@@ -77,7 +81,7 @@ PROMPT_AUDIT_STORYBOARD_ASSETS = """你是一个严谨的AI短剧视频 Prompt �
 - environment_id 是该分镜最终应复用的环境 id；如果需要新增同场景图生图变体，可填写当前已有最大 environment_id + 1 起的新 id；如果不需要改环境，可省略。
 - reference_environment_id 是当前环境图生成时应参考的本章节原环境 id；新增同场景图生图变体时必须填写，普通环境可省略或返回 null。
 - environment 在原描述含有已有角色/已有道具的资产信息、新增同场景图生图变体，或同场景图生图变体的前缀、视角、局部细节或构图需要调整时返回；变体必须以“基于参考场景图，”开头，具体参考 id 只填写在 reference_environment_id 中，不要写进 environment 正文。environment 可以包含普通稳定背景物，但禁止出现角色图索引或道具图索引中已有资产的名称、身份、外观、材质、功能、状态或其描述改写。
-- video_prompt 是修正图号引用后的完整视频生成 Prompt；只要 character_ids、prop_ids、environment_id 或原描述图号映射发生变化，就必须提供。
+- video_prompt 是修正后的完整视频生成 Prompt；只要资产引用、图号映射或内容尺度需要修正，就必须提供。
 - environment_changed 按修正后的 environment_id 与上一分镜环境是否不同填写；如果不确定可省略，程序会自动重算。
 
 用户输入：
@@ -98,6 +102,13 @@ PROMPT_AUDIT_STORYBOARD_ASSETS = """你是一个严谨的AI短剧视频 Prompt �
 class StoryboardAssetAuditor:
     """步骤3b：检查并修正分镜稿中的角色、道具和环境资产引用。"""
 
+    GRAPHIC_CONTENT_PATTERNS = (
+        re.compile(r"器官|脏器|肢解|断肢|皮肉.{0,4}(?:撕|裂)|撕开皮肉"),
+        re.compile(r"眼球.{0,6}(?:爆|裂|伤|刺|破)|刺穿.{0,8}(?:眼|后脑|头颅|身体|胸|腹)"),
+        re.compile(r"(?:血液|鲜血|体液|尸液|绿色液体|黑色液体).{0,10}(?:飞溅|喷溅|喷出|流出|冒出)"),
+        re.compile(r"(?:伤口|腹部|身体).{0,10}(?:内部|撕开|裂开).{0,10}(?:钻出|伸出|露出)"),
+    )
+
     def __init__(self, output_dir="output", model=None):
         self.output_dir = output_dir
         self.llm = LLMClient(model=model)
@@ -112,6 +123,9 @@ class StoryboardAssetAuditor:
         props = props if props is not None else self._load_props_for_asset_audit()
 
         before = json.dumps(storyboards, ensure_ascii=False, sort_keys=True)
+        normalized_ids = self._normalize_asset_id_image_references(storyboards)
+        if normalized_ids:
+            print(f"  已将资产 ID 图号转换为连续参考图号: {normalized_ids}")
         storyboards = self.audit_and_fix_asset_references(storyboards, characters, props=props, force=force)
         after = json.dumps(storyboards, ensure_ascii=False, sort_keys=True)
         if after != before:
@@ -157,13 +171,98 @@ class StoryboardAssetAuditor:
             props_for_prompt,
             environments_for_prompt,
         )
+        normalized_ids = self._normalize_asset_id_image_references(storyboards)
+        if normalized_ids:
+            changed = True
+            print(f"  已修正模型返回中的资产 ID 图号: {normalized_ids}")
+        remaining_graphic_ids = self._graphic_content_storyboard_ids(storyboards)
+        invalid_reference_ids = self._invalid_image_reference_storyboard_ids(storyboards)
         final_audit_hash = self._asset_audit_hash(storyboards, characters_for_prompt, props_for_prompt, environments_for_prompt)
-        self._save_asset_audit(final_audit_hash, corrections, changed)
+        if remaining_graphic_ids or invalid_reference_ids:
+            if invalid_reference_ids:
+                print(
+                    "  警告：以下分镜仍包含越界或类型错误的参考图号，"
+                    f"本次不写入审计缓存: {invalid_reference_ids}"
+                )
+            if remaining_graphic_ids:
+                print(
+                    "  警告：以下分镜改写后仍命中重度血腥内容检查，"
+                    f"本次不写入审计缓存，下次将重新检查: {remaining_graphic_ids}"
+                )
+        else:
+            self._save_asset_audit(final_audit_hash, corrections, changed)
         if changed:
             print("  视频 Prompt 资产引用检查完成，已自动修正遗漏引用")
         else:
             print("  视频 Prompt 资产引用检查完成，未发现需要修正的遗漏")
         return storyboards
+
+    def _graphic_content_storyboard_ids(self, storyboards):
+        matched_ids = []
+        for storyboard in storyboards:
+            video_prompt = str(storyboard.get("video_prompt") or "")
+            if any(pattern.search(video_prompt) for pattern in self.GRAPHIC_CONTENT_PATTERNS):
+                matched_ids.append(storyboard.get("storyboard_id"))
+        return matched_ids
+
+    @staticmethod
+    def _normalize_asset_id_image_references(storyboards):
+        """纠正把 character_id/prop_id 误写成图号的明确情况。"""
+        changed_ids = []
+        role_pattern = re.compile(r"图(\d+)中的角色")
+        prop_pattern = re.compile(r"图(\d+)中的道具")
+
+        for storyboard in storyboards:
+            prompt = str(storyboard.get("video_prompt") or "")
+            character_ids = storyboard.get("character_ids", [])
+            prop_ids = storyboard.get("prop_ids", [])
+            character_picture_by_id = {int(asset_id): index + 2 for index, asset_id in enumerate(character_ids)}
+            prop_start = 2 + len(character_ids)
+            prop_picture_by_id = {int(asset_id): prop_start + index for index, asset_id in enumerate(prop_ids)}
+            valid_character_pictures = set(character_picture_by_id.values())
+            valid_prop_pictures = set(prop_picture_by_id.values())
+
+            role_numbers = {int(value) for value in role_pattern.findall(prompt)}
+            prop_numbers = {int(value) for value in prop_pattern.findall(prompt)}
+            role_uses_asset_ids = bool(role_numbers - valid_character_pictures) and bool(
+                role_numbers.intersection(character_picture_by_id)
+            )
+            prop_uses_asset_ids = bool(prop_numbers - valid_prop_pictures) and bool(
+                prop_numbers.intersection(prop_picture_by_id)
+            )
+
+            if role_uses_asset_ids:
+                prompt = role_pattern.sub(
+                    lambda match: f"图{character_picture_by_id.get(int(match.group(1)), int(match.group(1)))}中的角色",
+                    prompt,
+                )
+            if prop_uses_asset_ids:
+                prompt = prop_pattern.sub(
+                    lambda match: f"图{prop_picture_by_id.get(int(match.group(1)), int(match.group(1)))}中的道具",
+                    prompt,
+                )
+
+            if prompt != storyboard.get("video_prompt", ""):
+                storyboard["video_prompt"] = prompt
+                changed_ids.append(storyboard.get("storyboard_id"))
+        return changed_ids
+
+    @staticmethod
+    def _invalid_image_reference_storyboard_ids(storyboards):
+        invalid_ids = []
+        role_pattern = re.compile(r"图(\d+)中的角色")
+        prop_pattern = re.compile(r"图(\d+)中的道具")
+        for storyboard in storyboards:
+            prompt = str(storyboard.get("video_prompt") or "")
+            character_count = len(storyboard.get("character_ids", []))
+            prop_count = len(storyboard.get("prop_ids", []))
+            valid_role_numbers = set(range(2, 2 + character_count))
+            valid_prop_numbers = set(range(2 + character_count, 2 + character_count + prop_count))
+            role_numbers = {int(value) for value in role_pattern.findall(prompt)}
+            prop_numbers = {int(value) for value in prop_pattern.findall(prompt)}
+            if not role_numbers.issubset(valid_role_numbers) or not prop_numbers.issubset(valid_prop_numbers):
+                invalid_ids.append(storyboard.get("storyboard_id"))
+        return invalid_ids
 
     def _parse_json(self, response):
         try:
@@ -547,7 +646,7 @@ class StoryboardAssetAuditor:
             "characters": characters_index,
             "props": props_index,
             "environments": environments_index,
-            "version": 10,
+            "version": 12,
         }
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
