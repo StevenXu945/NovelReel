@@ -9,16 +9,6 @@ class CharacterImageGenerator:
     """步骤2：为每个角色生成角色设定图（脸部特写 + 全身正面/侧面/背面三视图）"""
     BASE_VISUAL_BIBLE = ""
 
-    OLD_CONFLICT_MARKERS = (
-        "不要动漫",
-        "不要游戏原画",
-        "不要厚涂插画",
-        "自然肤色和真实皮肤纹理",
-        "电影级写实角色设定图",
-        "写实古风乡土质感",
-        "从左到右依次为站立的全身正面、全身侧面、全身背面。高质量",
-    )
-
     def __init__(self, output_dir="output"):
         self.image_gen = ImageGenerator(output_dir=output_dir)
         self.output_dir = output_dir
@@ -81,14 +71,6 @@ class CharacterImageGenerator:
     def _build_style_rules(self, style):
         return self.build_style_rules(style)
 
-    def _is_cached_prompt_stale(self, cached_info, style):
-        prompt = cached_info.get("prompt", "")
-        if f"本项目统一风格：{style}" not in prompt:
-            return True
-        if any(marker in prompt for marker in self.OLD_CONFLICT_MARKERS):
-            return True
-        return False
-
     def run(self, data):
         """data: dict with 'style' and 'characters' keys, or list of characters for backward compat"""
         if isinstance(data, list):
@@ -112,12 +94,17 @@ class CharacterImageGenerator:
             save_path = os.path.join(self.chars_dir, f"character_{char_id}.png")
 
             cached_info = character_images.get(name, {})
-            should_regenerate = self._is_cached_prompt_stale(cached_info, style) if cached_info else False
-            if action in {"update", "new_variant"} and cached_info and cached_info.get("asset_action") != action:
-                should_regenerate = True
-
-            # 跳过已存在且 prompt 未过期的图片
-            if name in character_images and os.path.exists(save_path) and not should_regenerate:
+            if os.path.exists(save_path):
+                if not cached_info:
+                    character_images[name] = {
+                        "path": save_path,
+                        "image_url": "",
+                        "prompt": "",
+                        "char_id": char_id,
+                        "asset_action": action,
+                        "asset_reason": char.get("asset_reason", ""),
+                        "source_path": "",
+                    }
                 print(f"  角色 [{name}] (character#{char_id}) 图片已存在，跳过")
                 continue
 
@@ -156,7 +143,7 @@ class CharacterImageGenerator:
             result_path, image_url = self.image_gen.generate_character_image(
                 full_prompt,
                 save_path=save_path,
-                force=should_regenerate or uses_reference,
+                force=uses_reference,
                 reference_image_urls=reference_urls,
                 reference_image_paths=reference_paths,
             )
@@ -199,9 +186,17 @@ class CharacterImageGenerator:
             previous_name = char.get("previous_name") or name
             save_path = os.path.join(self.chars_dir, f"character_{char_id}.png")
             cached_info = character_images.get(name, {})
-            should_regenerate = self._is_cached_prompt_stale(cached_info, style) if cached_info else False
-
-            if name in character_images and os.path.exists(save_path) and not should_regenerate:
+            if os.path.exists(save_path):
+                if not cached_info:
+                    character_images[name] = {
+                        "path": save_path,
+                        "image_url": "",
+                        "prompt": "",
+                        "char_id": char_id,
+                        "asset_action": action,
+                        "asset_reason": char.get("asset_reason", ""),
+                        "source_path": "",
+                    }
                 print(f"  角色 [{name}] (character#{char_id}) 图片已存在，跳过")
                 continue
 
@@ -213,9 +208,7 @@ class CharacterImageGenerator:
             )
             previous_path = previous_info.get("path", "")
             previous_url = previous_info.get("image_url", "")
-            previous_prompt_stale = self._is_cached_prompt_stale(previous_info, style) if previous_info else False
-
-            if action == "reuse" and previous_path and os.path.exists(previous_path) and not previous_prompt_stale:
+            if action == "reuse" and previous_path and os.path.exists(previous_path):
                 shutil.copy2(previous_path, save_path)
                 prompt = previous_info.get("prompt", self.build_prompt(char, style))
                 image_url = previous_url
@@ -259,8 +252,6 @@ class CharacterImageGenerator:
                     f"{full_prompt}"
                 )
                 print(f"  角色 [{name}] 参考上一章节生成新图: {char.get('asset_reason', '')}")
-            elif action == "reuse" and previous_prompt_stale:
-                print(f"  角色 [{name}] 上一章节图片 prompt 已过期，按当前一致性规则重生成")
             else:
                 print(f"  角色 [{name}] 生成新增角色图")
 
