@@ -26,8 +26,6 @@ class MinimaxPromptGenerator:
         characters = characters if characters is not None else self._load_json("characters.json")
         props = props if props is not None else self._load_json_with_fallback("prop.json", "props.json")
         env_images = env_images if env_images is not None else self._load_json("env_images.json")
-        style = characters.get("style", "动漫") if isinstance(characters, dict) else "动漫"
-
         with open(self.skill_path, "r", encoding="utf-8") as f:
             skill = f.read()
 
@@ -39,7 +37,7 @@ class MinimaxPromptGenerator:
         result = self._parse_json(response)
         minimax_items = self._normalize_result(result)
         self._validate_model_result(source_items, minimax_items)
-        minimax_items = self._attach_source_ids(source_items, minimax_items, style=style)
+        minimax_items = self._attach_source_ids(source_items, minimax_items)
 
         os.makedirs(self.output_dir, exist_ok=True)
         with open(self.save_path, "w", encoding="utf-8") as f:
@@ -206,7 +204,7 @@ Input storyboards:
                 raise ValueError(f"分镜 {item.get('storyboard_id')} 时长为 {duration} 秒，至少需要两个 Shot")
 
     @staticmethod
-    def _attach_source_ids(source_items, result_items, style="动漫"):
+    def _attach_source_ids(source_items, result_items):
         """ID 字段取自原分镜，避免模型漏写或篡改资产引用。"""
         source_by_id = {item["storyboard_id"]: item for item in source_items}
         output = []
@@ -218,7 +216,6 @@ Input storyboards:
                 item["video_prompt"],
                 count=1,
             )
-            video_prompt = MinimaxPromptGenerator._apply_video_constraints(video_prompt, style)
             output.append({
                 "storyboard_id": item["storyboard_id"],
                 "duration": source.get("duration"),
@@ -228,43 +225,6 @@ Input storyboards:
                 "video_prompt": video_prompt,
             })
         return output
-
-    @staticmethod
-    def _apply_video_constraints(video_prompt, style):
-        """把项目风格约束注入详细镜头描述。"""
-        constraints = MinimaxPromptGenerator._build_english_style_constraint(style)
-        marker = "detailed_description:"
-        if marker not in video_prompt:
-            return video_prompt
-        return video_prompt.replace(marker, f"{marker}\n{constraints}", 1)
-
-    @staticmethod
-    def _build_english_style_constraint(style):
-        style_text = str(style or "动漫").strip() or "动漫"
-        if any(keyword in style_text for keyword in ("动漫", "动画", "漫画", "手绘", "卡通", "二次元")):
-            rule = (
-                "Use a hand-drawn animation style with clean linework and consistent cel shading; "
-                "do not mix in live-action photography, 3D rendering, or heavy painterly rendering."
-            )
-        elif "水墨" in style_text or "国画" in style_text:
-            rule = (
-                "Use a Chinese ink-painting style with expressive ink lines, paper texture, negative "
-                "space, and restrained East Asian color; do not mix in live-action or 3D rendering."
-            )
-        elif "像素" in style_text:
-            rule = (
-                "Use a pixel-art style with crisp pixel edges, a limited palette, and clear silhouettes; "
-                "do not mix in smooth photorealistic or 3D rendering."
-            )
-        elif "写实" in style_text or "电影" in style_text:
-            rule = (
-                "Use cinematic realism with natural lighting, physically plausible materials, and a "
-                "photographic finish; do not mix in animation, pixel art, or heavy painterly rendering."
-            )
-        else:
-            rule = "Follow the caller-supplied visual style consistently without mixing incompatible styles."
-        return f"Visual-style constraint: {rule}"
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="步骤5b：将 storyboards.json 转换为 Minimax 提示词")
