@@ -138,8 +138,7 @@ Describe the target video shot by shot in playback order.
 - Put complete dialogue and lyrics only inside `<d>[Language] ...</d>`.
 - Use `<scenetrans>` and `<cutoff>` only when dialogue crosses a cut or is truncated by the ending.
 
-Before `[Shot 1]`, use one or two English sentences to establish the overall visual
-style. For generation tasks, normally write 350-500 English words. Dialogue-dense
+For generation tasks, normally write 350-500 English words. Dialogue-dense
 content prioritizes fitting the spoken timeline rather than mechanically reaching the
 word count.
 
@@ -175,17 +174,6 @@ by `(Sx)`. Do not infer voice timbre, accent, or delivery from visual descriptio
 Preserve supplied dialogue, its language, speaker order, and meaning. Do not invent
 dialogue unless a short line is necessary to express an event already present in the
 source prompt.
-
-### 5.4 Mandatory Generation Constraints
-
-State the following requirements naturally at the beginning of `detailed_description`:
-
-- Follow the project visual style supplied by the caller and do not mix incompatible styles.
-- Do not directly show exposed organs, penetration wounds, dismemberment, torn flesh,
-  eye injury, or substantial blood or bodily-fluid spray.
-- Preserve the plot outcome of violent events through occlusion, silhouette, off-screen
-  action, brief cutaways, sound, environmental reactions, and character reactions.
-- Do not show any visible text, subtitles, captions, titles, logos, signs, or watermarks.
 
 ## 6. Target-Video Sound
 
@@ -226,7 +214,6 @@ retention_analysis:
 <Subject 4> (appears in [Shot 1], [Shot 2]): fully_preserved - the young man's short wavy brown hair and dark-grey hoodie are retained.
 
 detailed_description:
-The target video uses a realistic multi-camera sitcom style with warm indoor lighting. It contains no visible text, subtitles, captions, titles, logos, signs, or watermarks.
 [Shot 1] A medium shot establishes <Subject 1>, the coffee shop with its exposed brick wall, orange tufted sofa, patterned pillows, unlettered neon wall light, and wooden coffee table. <Subject 3> (S1), the young woman with long blonde hair and a light-pink button-down shirt with rolled-up sleeves, sits on the sofa holding a chocolate-chip cookie. From the left, <Subject 4>, the young man with short wavy brown hair and a dark-grey hoodie with drawstrings, enters holding the leash of <Subject 2>, the thick-furred white Samoyed with pointed ears, a dark nose, and a curved tail. The dog lunges toward the cookie and pulls the leash taut. <Subject 3> (S1) jerks her hand back and exclaims with light annoyance, <d>[English] Hey! Watch your dog!</d> She closes her lips and guards the cookie while <Subject 4> pulls the dog back.
 [Shot 2] At 00:03.000, the shot cuts to a close-up of <Subject 4> (S2), the young man in the dark-grey hoodie from Shot 1, sitting beside <Subject 3> on the sofa and holding <Subject 2> securely in his arms. <Subject 4> (S2) speaks with a playful tone and an easy conversational pace, <d>[English] He just likes cookies more than me.</d> He closes his mouth into an apologetic smile and strokes the dog's thick white fur.
 [Shot 3] At 00:05.000, the shot cuts to a close-up of <Subject 3> (S1), the blonde woman in the light-pink shirt from Shot 1. Her annoyance softens as she looks toward the Samoyed. <Subject 3> (S1) replies with an amused cadence, <d>[English] Well, he has good taste at least.</d> She smiles and raises the cookie in a small toast-like gesture. A classic canned audience laugh begins immediately after the line and continues through the final frame.
